@@ -6,26 +6,10 @@
 <meta name="theme-color" content="#0a0e1a">
 <title>Simulador Copa do Mundo 2026</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⚽</text></svg>">
-<style>
-  html, body { margin:0; padding:0; background:#0a0e1a; color:#e2e8f0; font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif; min-height:100vh; }
-  #root { min-height:100vh; }
-  .boot { display:flex; align-items:center; justify-content:center; min-height:100vh; flex-direction:column; gap:12px; font-size:14px; color:#94a3b8; }
-  .boot .spinner { width:32px; height:32px; border:3px solid #1e293b; border-top-color:#fbbf24; border-radius:50%; animation:spin .8s linear infinite; }
-  @keyframes spin { to { transform: rotate(360deg); } }
-  .err { font-family:monospace; padding:20px; color:#fca5a5; font-size:12px; white-space:pre-wrap; word-break:break-all; }
-</style>
-</head>
-<body>
+<style>html,body{margin:0;padding:0;background:#0a0e1a;color:#e2e8f0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;min-height:100vh}#root{min-height:100vh}.boot{display:flex;align-items:center;justify-content:center;min-height:100vh;flex-direction:column;gap:12px;font-size:14px;color:#94a3b8}.boot .spinner{width:32px;height:32px;border:3px solid #1e293b;border-top-color:#fbbf24;border-radius:50%;animation:spin .8s linear infinite}@keyframes spin{to{transform:rotate(360deg)}}.err{font-family:monospace;padding:20px;color:#fca5a5;font-size:12px;white-space:pre-wrap;word-break:break-all}</style>
+</head><body>
 <div id="root"><div class="boot"><div class="spinner"></div><div>Carregando simulador...</div></div></div>
-
-<script>
-// Catch any error and surface it to the page
-window.addEventListener('error', function(e) {
-  var r = document.getElementById('root');
-  if (r) r.innerHTML = '<div class="err">ERRO: ' + (e.message || 'desconhecido') + '\nLinha: ' + (e.lineno || '?') + '\n\n' + (e.error && e.error.stack ? e.error.stack : '') + '</div>';
-});
-</script>
-
+<script>window.addEventListener('error',function(e){var r=document.getElementById('root');if(r)r.innerHTML='<div class="err">ERRO: '+(e.message||'?')+'\nLine: '+(e.lineno||'?')+'\n\n'+(e.error&&e.error.stack?e.error.stack:'')+'</div>'});</script>
 <script>
 /**
  * @license React
@@ -327,10 +311,8 @@ var d=null!=c&&c.hydratedSources||null,e=!1,f="",g=aj;null!==c&&void 0!==c&&(!0=
 function(a,b,c){if(!Vd(b))throw Error(m(200));return Wd(null,a,b,!1,c)};Q.unmountComponentAtNode=function(a){if(!Vd(a))throw Error(m(40));return a._reactRootContainer?(yb(function(){Wd(null,null,a,!1,function(){a._reactRootContainer=null;a[Ja]=null})}),!0):!1};Q.unstable_batchedUpdates=Tf;Q.unstable_renderSubtreeIntoContainer=function(a,b,c,d){if(!Vd(c))throw Error(m(200));if(null==a||void 0===a._reactInternals)throw Error(m(38));return Wd(a,b,c,!1,d)};Q.version="18.3.1-next-f1338f8080-20240426"});
 })();
 </script>
-
 <script>
 const { useState, useMemo, useRef, useEffect } = React;
-
 function _extends() { return _extends = Object.assign ? Object.assign.bind() : function (n) { for (var e = 1; e < arguments.length; e++) { var t = arguments[e]; for (var r in t) ({}).hasOwnProperty.call(t, r) && (n[r] = t[r]); } return n; }, _extends.apply(null, arguments); }
 const PO = {
   UEFA_A: {
@@ -421,104 +403,116 @@ const PT = {
   'Bolivia': 'Bolívia'
 };
 const FP = {
-  'France': 1886,
-  'Spain': 1874,
-  'Argentina': 1871,
-  'England': 1834,
-  'Portugal': 1765,
-  'Brazil': 1756,
-  'Colombia': 1704,
+  'Spain': 1876,
+  'Argentina': 1875,
+  'France': 1877,
+  'England': 1826,
+  'Brazil': 1761,
+  'Portugal': 1764,
+  'Netherlands': 1758,
   'Morocco': 1756,
-  'Belgium': 1730,
-  'Netherlands': 1728,
-  'Germany': 1724,
-  'Croatia': 1716,
-  'Senegal': 1714,
-  'Mexico': 1682,
-  'USA': 1678,
-  'Uruguay': 1672,
-  'Japan': 1654,
-  'Switzerland': 1654,
-  'Ecuador': 1594,
-  'Türkiye': 1592,
-  'Austria': 1585,
-  'Australia': 1574,
-  'South Korea': 1602,
-  'Algeria': 1560,
-  'Egypt': 1562,
-  'Norway': 1548,
+  'Belgium': 1735,
+  'Germany': 1730,
+  'Croatia': 1717,
+  'Senegal': 1689,
+  'Italy': 1700,
+  'Colombia': 1693,
+  'USA': 1673,
+  'Mexico': 1681,
+  'Uruguay': 1673,
+  'Switzerland': 1649,
+  'Japan': 1660,
+  'Iran': 1615,
+  'Denmark': 1621,
+  'South Korea': 1589,
+  'Ecuador': 1595,
+  'Austria': 1593,
+  'Türkiye': 1599,
+  'Australia': 1581,
+  'Algeria': 1564,
   'Canada': 1556,
-  'Paraguay': 1540,
-  'Sweden': 1548,
-  'Scotland': 1543,
-  'Czechia': 1546,
-  'Iran': 1540,
-  'Uzbekistan': 1535,
-  'Bosnia and Herzegovina': 1518,
-  'Cape Verde': 1514,
-  'Tunisia': 1510,
-  'Ghana': 1508,
-  'Ivory Coast': 1507,
-  'Saudi Arabia': 1505,
-  'DR Congo': 1498,
-  'Iraq': 1488,
-  'Panama': 1475,
-  'Jordan': 1474,
-  'South Africa': 1471,
-  'Haiti': 1466,
-  'New Zealand': 1464,
-  'Curaçao': 1380,
-  'Qatar': 1370
+  'Egypt': 1563,
+  'Norway': 1551,
+  'Paraguay': 1504,
+  'Scotland': 1490,
+  'Czechia': 1499,
+  'Tunisia': 1485,
+  'Saudi Arabia': 1400,
+  'Ivory Coast': 1533,
+  'Qatar': 1430,
+  'Ghana': 1340,
+  'South Africa': 1405,
+  'Cape Verde': 1360,
+  'Panama': 1541,
+  'New Zealand': 1295,
+  'Haiti': 1305,
+  'Uzbekistan': 1455,
+  'Jordan': 1390,
+  'Curaçao': 1310,
+  'Sweden': 1515,
+  'Poland': 1528,
+  'Kosovo': 1315,
+  'Bosnia and Herzegovina': 1380,
+  'DR Congo': 1475,
+  'Jamaica': 1350,
+  'Iraq': 1420,
+  'Bolivia': 1325
 };
 const ELO = {
   'Spain': 2165,
   'Argentina': 2113,
-  'France': 2082,
+  'France': 2081,
   'England': 2020,
   'Brazil': 1984,
   'Portugal': 1984,
-  'Colombia': 1975,
   'Netherlands': 1961,
-  'Ecuador': 1933,
-  'Croatia': 1930,
+  'Morocco': 1821,
+  'Belgium': 1867,
   'Germany': 1923,
-  'Norway': 1912,
-  'Japan': 1904,
-  'Türkiye': 1902,
+  'Croatia': 1930,
+  'Senegal': 1878,
+  'Italy': 1859,
+  'Colombia': 1975,
+  'USA': 1721,
+  'Mexico': 1860,
   'Uruguay': 1892,
   'Switzerland': 1889,
-  'Senegal': 1879,
-  'Belgium': 1866,
-  'Mexico': 1858,
-  'Paraguay': 1833,
-  'Austria': 1827,
-  'Morocco': 1821,
-  'Canada': 1784,
-  'Australia': 1783,
-  'Scotland': 1767,
+  'Japan': 1904,
   'Iran': 1760,
+  'Denmark': 1864,
   'South Korea': 1752,
+  'Ecuador': 1933,
+  'Austria': 1827,
+  'Türkiye': 1902,
+  'Australia': 1783,
   'Algeria': 1743,
-  'Panama': 1737,
-  'Uzbekistan': 1727,
-  'Czechia': 1726,
-  'USA': 1721,
-  'Sweden': 1719,
-  'Jordan': 1690,
+  'Canada': 1784,
   'Egypt': 1689,
-  'Ivory Coast': 1676,
-  'DR Congo': 1655,
+  'Norway': 1912,
+  'Paraguay': 1833,
+  'Scotland': 1767,
+  'Czechia': 1726,
   'Tunisia': 1636,
-  'Iraq': 1607,
-  'Bosnia and Herzegovina': 1594,
-  'New Zealand': 1585,
   'Saudi Arabia': 1568,
-  'Cape Verde': 1549,
-  'Haiti': 1532,
+  'Ivory Coast': 1676,
+  'Qatar': 1425,
+  'Ghana': 1503,
   'South Africa': 1524,
-  'Ghana': 1505,
+  'Cape Verde': 1549,
+  'Panama': 1737,
+  'New Zealand': 1585,
+  'Haiti': 1532,
+  'Uzbekistan': 1727,
+  'Jordan': 1690,
   'Curaçao': 1436,
-  'Qatar': 1425
+  'Sweden': 1719,
+  'Poland': 1740,
+  'Kosovo': 1670,
+  'Bosnia and Herzegovina': 1594,
+  'DR Congo': 1655,
+  'Jamaica': 1600,
+  'Iraq': 1607,
+  'Bolivia': 1570
 };
 const BET = {
   'Spain': 2199,
@@ -577,134 +571,117 @@ const BET = {
   'Bosnia and Herzegovina': 1420
 };
 const PELE = {
-  'Argentina': 2065,
-  'Spain': 2064,
-  'England': 2010,
-  'France': 2008,
-  'Brazil': 2005,
-  'Portugal': 1952,
-  'Germany': 1946,
+  'Spain': 2084,
+  'Argentina': 2067,
+  'France': 2026,
+  'England': 2030,
+  'Brazil': 2001,
+  'Portugal': 1969,
+  'Netherlands': 1952,
+  'Morocco': 1856,
+  'Belgium': 1890,
+  'Germany': 1965,
+  'Croatia': 1876,
+  'Senegal': 1901,
+  'Italy': 1897,
   'Colombia': 1945,
-  'Netherlands': 1934,
-  'Uruguay': 1923,
-  'Norway': 1920,
-  'Ecuador': 1920,
-  'Senegal': 1894,
-  'Japan': 1885,
-  'Italy': 1880,
-  'Türkiye': 1876,
-  'Belgium': 1875,
-  'Switzerland': 1870,
-  'Croatia': 1866,
-  'Paraguay': 1851,
-  'Denmark': 1851,
-  'Morocco': 1843,
-  'Mexico': 1836,
-  'Austria': 1816,
-  'Canada': 1792,
-  'Scotland': 1791,
-  'Algeria': 1787,
-  'Australia': 1783,
-  'Sweden': 1773,
-  'Ivory Coast': 1772,
-  'USA': 1769,
-  'South Korea': 1766,
-  'Poland': 1765,
-  'Egypt': 1754,
-  'Czechia': 1753,
-  'Hungary': 1750,
-  'Panama': 1744,
-  'Wales': 1741,
-  'Ireland': 1739,
-  'DR Congo': 1738,
-  'Peru': 1737,
-  'Kosovo': 1730,
-  'Iran': 1725,
-  'Slovenia': 1722,
-  'Slovakia': 1715,
-  'Mali': 1710,
-  'Cameroon': 1705,
-  'Israel': 1703,
-  'Romania': 1700,
-  'Tunisia': 1699,
-  'Georgia': 1699,
-  'Uzbekistan': 1695,
-  'Albania': 1694,
-  'Bosnia and Herzegovina': 1690,
-  'Costa Rica': 1677,
-  'Ghana': 1673,
-  'Burkina Faso': 1672,
-  'Northern Ireland': 1670,
-  'South Africa': 1667,
-  'Iceland': 1663,
-  'Bolivia': 1655,
-  'Jordan': 1652,
-  'New Zealand': 1651,
-  'Honduras': 1638,
-  'Iraq': 1636,
-  'Saudi Arabia': 1631,
-  'Haiti': 1630,
-  'Cape Verde': 1617,
-  'Jamaica': 1609,
-  'Qatar': 1549,
-  'Curaçao': 1579
+  'USA': 1805,
+  'Mexico': 1845,
+  'Uruguay': 1922,
+  'Switzerland': 1883,
+  'Japan': 1872,
+  'Iran': 1720,
+  'Denmark': 1864,
+  'South Korea': 1754,
+  'Ecuador': 1919,
+  'Austria': 1830,
+  'Türkiye': 1890,
+  'Australia': 1766,
+  'Algeria': 1797,
+  'Canada': 1815,
+  'Egypt': 1763,
+  'Norway': 1933,
+  'Paraguay': 1850,
+  'Scotland': 1806,
+  'Czechia': 1765,
+  'Tunisia': 1704,
+  'Saudi Arabia': 1628,
+  'Ivory Coast': 1779,
+  'Qatar': 1542,
+  'Ghana': 1679,
+  'South Africa': 1677,
+  'Cape Verde': 1619,
+  'Panama': 1739,
+  'New Zealand': 1630,
+  'Haiti': 1631,
+  'Uzbekistan': 1709,
+  'Jordan': 1658,
+  'Curaçao': 1572,
+  'Sweden': 1789,
+  'Poland': 1779,
+  'Kosovo': 1737,
+  'Bosnia and Herzegovina': 1697,
+  'DR Congo': 1744,
+  'Jamaica': 1611,
+  'Iraq': 1646,
+  'Bolivia': 1656
 };
 const PELE_EST = new Set();
 const TILT = {
-  'Argentina': -.13,
-  'Spain': .11,
-  'England': -.10,
+  'Spain': .08,
+  'Argentina': -.11,
   'France': -.03,
-  'Brazil': -.02,
-  'Portugal': .05,
-  'Germany': .57,
+  'England': -.11,
+  'Brazil': .01,
+  'Portugal': .03,
+  'Netherlands': .17,
+  'Morocco': -.44,
+  'Belgium': .21,
+  'Germany': .55,
+  'Croatia': 0,
+  'Senegal': -.32,
+  'Italy': -.34,
   'Colombia': -.25,
-  'Netherlands': .19,
-  'Uruguay': -.19,
-  'Norway': .24,
-  'Ecuador': -.28,
-  'Senegal': -.34,
-  'Japan': .06,
-  'Italy': -.32,
-  'Türkiye': .26,
-  'Belgium': .23,
-  'Switzerland': .10,
-  'Croatia': -.01,
-  'Paraguay': -.23,
-  'Denmark': .10,
-  'Morocco': -.45,
-  'Mexico': -.22,
-  'Austria': .23,
-  'Canada': -.06,
-  'Scotland': -.05,
-  'Algeria': .09,
-  'Australia': -.16,
-  'Sweden': .18,
-  'Ivory Coast': -.07,
-  'USA': .12,
-  'South Korea': -.20,
-  'Poland': .16,
-  'Egypt': -.12,
-  'Czechia': .07,
-  'Panama': -.04,
-  'DR Congo': -.11,
-  'Kosovo': .04,
-  'Iran': -.17,
-  'Tunisia': -.22,
-  'Uzbekistan': -.06,
-  'Bosnia and Herzegovina': .14,
+  'USA': .11,
+  'Mexico': -.20,
+  'Uruguay': -.17,
+  'Switzerland': .09,
+  'Japan': .08,
+  'Iran': -.16,
+  'Denmark': .11,
+  'South Korea': -.17,
+  'Ecuador': -.24,
+  'Austria': .22,
+  'Türkiye': .25,
+  'Australia': -.12,
+  'Algeria': .08,
+  'Canada': -.07,
+  'Egypt': -.09,
+  'Norway': .23,
+  'Paraguay': -.20,
+  'Scotland': -.06,
+  'Czechia': .09,
+  'Tunisia': -.20,
+  'Saudi Arabia': -.24,
+  'Ivory Coast': -.06,
+  'Qatar': .15,
   'Ghana': -.10,
   'South Africa': -.23,
-  'Bolivia': .17,
-  'Jordan': -.06,
-  'New Zealand': -.09,
-  'Iraq': -.19,
-  'Saudi Arabia': -.27,
-  'Haiti': .24,
-  'Cape Verde': -.31,
-  'Jamaica': -.25,
-  'Qatar': .17,
-  'Curaçao': .05
+  'Cape Verde': -.28,
+  'Panama': -.04,
+  'New Zealand': -.01,
+  'Haiti': .23,
+  'Uzbekistan': -.02,
+  'Jordan': -.05,
+  'Curaçao': .03,
+  'Sweden': .18,
+  'Poland': .15,
+  'Kosovo': .04,
+  'Bosnia and Herzegovina': .14,
+  'DR Congo': -.07,
+  'Jamaica': -.22,
+  'Iraq': -.17,
+  'Bolivia': .17
 };
 const FL = {
   'Spain': '🇪🇸',
@@ -858,7 +835,7 @@ function solve3rd(qG) {
   });
   return r;
 }
-const GS = [['A', 0, 1, '11/Jun', 'Cidade do México'], ['A', 2, 3, '11/Jun', 'Guadalajara'], ['B', 0, 1, '12/Jun', 'Toronto'], ['D', 0, 1, '12/Jun', 'Los Angeles'], ['B', 2, 3, '12/Jun', 'Vancouver'], ['C', 0, 1, '13/Jun', 'Nova York/NJ'], ['C', 2, 3, '13/Jun', 'Boston'], ['D', 2, 3, '13/Jun', 'Vancouver'], ['E', 0, 1, '14/Jun', 'Houston'], ['E', 2, 3, '14/Jun', 'Filadélfia'], ['F', 0, 1, '14/Jun', 'Dallas'], ['F', 2, 3, '14/Jun', 'Monterrey'], ['G', 0, 1, '15/Jun', 'Filadélfia'], ['G', 2, 3, '15/Jun', 'Los Angeles'], ['H', 0, 1, '15/Jun', 'Atlanta'], ['H', 2, 3, '15/Jun', 'Miami'], ['I', 0, 1, '16/Jun', 'Nova York/NJ'], ['I', 2, 3, '16/Jun', 'Boston'], ['J', 0, 1, '16/Jun', 'Kansas City'], ['J', 2, 3, '16/Jun', 'São Francisco'], ['K', 0, 1, '17/Jun', 'Houston'], ['K', 2, 3, '17/Jun', 'Cidade do México'], ['L', 0, 1, '17/Jun', 'Dallas'], ['L', 2, 3, '17/Jun', 'Toronto'], ['A', 3, 1, '18/Jun', 'Atlanta'], ['A', 0, 2, '18/Jun', 'Guadalajara'], ['B', 3, 1, '18/Jun', 'Los Angeles'], ['B', 0, 2, '18/Jun', 'Vancouver'], ['C', 3, 1, '19/Jun', 'Boston'], ['C', 0, 2, '19/Jun', 'Filadélfia'], ['D', 0, 2, '19/Jun', 'Seattle'], ['D', 3, 1, '19/Jun', 'São Francisco'], ['E', 0, 2, '20/Jun', 'Houston'], ['E', 3, 1, '20/Jun', 'Dallas'], ['F', 3, 1, '20/Jun', 'Monterrey'], ['F', 0, 2, '20/Jun', 'Vancouver'], ['G', 0, 2, '21/Jun', 'Los Angeles'], ['H', 0, 2, '21/Jun', 'Atlanta'], ['H', 3, 1, '21/Jun', 'Miami'], ['G', 3, 1, '21/Jun', 'Vancouver'], ['J', 0, 2, '22/Jun', 'Dallas'], ['I', 0, 2, '22/Jun', 'Filadélfia'], ['I', 3, 1, '22/Jun', 'Nova York/NJ'], ['J', 3, 1, '22/Jun', 'São Francisco'], ['K', 0, 2, '23/Jun', 'Guadalajara'], ['K', 3, 1, '23/Jun', 'Cidade do México'], ['L', 0, 2, '23/Jun', 'Boston'], ['L', 3, 1, '23/Jun', 'Toronto'], ['A', 3, 0, '24/Jun', 'Cidade do México'], ['A', 1, 2, '24/Jun', 'Guadalajara'], ['B', 3, 0, '24/Jun', 'Vancouver'], ['B', 1, 2, '24/Jun', 'Seattle'], ['C', 3, 0, '24/Jun', 'Miami'], ['C', 1, 2, '24/Jun', 'Atlanta'], ['D', 3, 0, '25/Jun', 'Los Angeles'], ['D', 1, 2, '25/Jun', 'São Francisco'], ['E', 1, 2, '25/Jun', 'Dallas'], ['E', 3, 0, '25/Jun', 'Houston'], ['F', 1, 2, '25/Jun', 'Monterrey'], ['F', 3, 0, '25/Jun', 'Vancouver'], ['G', 3, 0, '26/Jun', 'Filadélfia'], ['G', 1, 2, '26/Jun', 'Los Angeles'], ['H', 2, 1, '26/Jun', 'Dallas'], ['H', 3, 0, '26/Jun', 'Miami'], ['I', 3, 0, '26/Jun', 'Boston'], ['I', 1, 2, '26/Jun', 'Toronto'], ['J', 3, 0, '27/Jun', 'Dallas'], ['J', 1, 2, '27/Jun', 'Kansas City'], ['K', 3, 0, '27/Jun', 'Atlanta'], ['K', 1, 2, '27/Jun', 'Houston'], ['L', 3, 0, '27/Jun', 'Filadélfia'], ['L', 1, 2, '27/Jun', 'Nova York/NJ']];
+const GS = [['A', 0, 1, '11/Jun', 'Cidade do México'], ['A', 2, 3, '11/Jun', 'Guadalajara'], ['B', 0, 1, '12/Jun', 'Toronto'], ['D', 0, 1, '12/Jun', 'Los Angeles'], ['D', 2, 3, '13/Jun', 'Vancouver'], ['B', 2, 3, '13/Jun', 'São Francisco'], ['C', 0, 1, '13/Jun', 'Nova York/NJ'], ['C', 2, 3, '13/Jun', 'Boston'], ['E', 0, 1, '14/Jun', 'Houston'], ['F', 0, 1, '14/Jun', 'Dallas'], ['E', 2, 3, '14/Jun', 'Filadélfia'], ['F', 2, 3, '14/Jun', 'Monterrey'], ['H', 0, 1, '15/Jun', 'Atlanta'], ['G', 0, 1, '15/Jun', 'Seattle'], ['H', 2, 3, '15/Jun', 'Miami'], ['G', 2, 3, '15/Jun', 'Los Angeles'], ['J', 0, 1, '16/Jun', 'Kansas City'], ['I', 0, 1, '16/Jun', 'Nova York/NJ'], ['I', 2, 3, '16/Jun', 'Boston'], ['J', 2, 3, '17/Jun', 'São Francisco'], ['K', 0, 1, '17/Jun', 'Houston'], ['L', 0, 1, '17/Jun', 'Dallas'], ['L', 2, 3, '17/Jun', 'Toronto'], ['K', 2, 3, '17/Jun', 'Cidade do México'], ['A', 3, 1, '18/Jun', 'Atlanta'], ['B', 3, 1, '18/Jun', 'Los Angeles'], ['B', 0, 2, '18/Jun', 'Vancouver'], ['A', 0, 2, '18/Jun', 'Guadalajara'], ['D', 3, 1, '19/Jun', 'São Francisco'], ['D', 0, 2, '19/Jun', 'Seattle'], ['C', 3, 1, '19/Jun', 'Boston'], ['C', 0, 2, '19/Jun', 'Filadélfia'], ['F', 0, 2, '20/Jun', 'Houston'], ['E', 0, 2, '20/Jun', 'Toronto'], ['E', 3, 1, '20/Jun', 'Kansas City'], ['F', 3, 1, '21/Jun', 'Monterrey'], ['H', 0, 2, '21/Jun', 'Atlanta'], ['G', 0, 2, '21/Jun', 'Los Angeles'], ['H', 3, 1, '21/Jun', 'Miami'], ['G', 3, 1, '21/Jun', 'Vancouver'], ['J', 0, 2, '22/Jun', 'Dallas'], ['I', 0, 2, '22/Jun', 'Filadélfia'], ['I', 3, 1, '22/Jun', 'Nova York/NJ'], ['J', 3, 1, '23/Jun', 'São Francisco'], ['K', 0, 2, '23/Jun', 'Houston'], ['L', 0, 2, '23/Jun', 'Boston'], ['L', 3, 1, '23/Jun', 'Toronto'], ['K', 3, 1, '23/Jun', 'Guadalajara'], ['B', 3, 0, '24/Jun', 'Vancouver'], ['B', 1, 2, '24/Jun', 'Seattle'], ['C', 3, 0, '24/Jun', 'Miami'], ['C', 1, 2, '24/Jun', 'Atlanta'], ['A', 3, 0, '24/Jun', 'Cidade do México'], ['A', 1, 2, '24/Jun', 'Monterrey'], ['E', 1, 2, '25/Jun', 'Filadélfia'], ['E', 3, 0, '25/Jun', 'Nova York/NJ'], ['F', 1, 2, '25/Jun', 'Dallas'], ['F', 3, 0, '25/Jun', 'Kansas City'], ['D', 3, 0, '25/Jun', 'Los Angeles'], ['D', 1, 2, '25/Jun', 'São Francisco'], ['I', 3, 0, '26/Jun', 'Boston'], ['I', 1, 2, '26/Jun', 'Toronto'], ['H', 1, 2, '26/Jun', 'Houston'], ['H', 3, 0, '26/Jun', 'Guadalajara'], ['G', 3, 0, '27/Jun', 'Vancouver'], ['G', 1, 2, '27/Jun', 'Seattle'], ['L', 3, 0, '27/Jun', 'Nova York/NJ'], ['L', 1, 2, '27/Jun', 'Filadélfia'], ['K', 3, 0, '27/Jun', 'Miami'], ['K', 1, 2, '27/Jun', 'Atlanta'], ['J', 3, 0, '27/Jun', 'Dallas'], ['J', 1, 2, '27/Jun', 'Kansas City']];
 let _ME = 1.32;
 const HB = 50;
 const CITY_COUNTRY = {
@@ -914,13 +891,12 @@ const TZ = {
   'Filadélfia': -1,
   'MetLife': -1
 };
-const SLOTS = ['13:00', '16:00', '19:00', '22:00'];
-const GS_BRT = ['16:00', '23:00', '16:00', '22:00', '01:00', '19:00', '22:00', '16:00', '14:00', '20:00', '17:00', '23:00', '16:00', '22:00', '13:00', '19:00', '16:00', '19:00', '22:00', '01:00', '14:00', '23:00', '17:00', '20:00', '13:00', '22:00', '16:00', '19:00', '19:00', '22:00', '16:00', '01:00', '14:00', '17:00', '01:00', '14:00', '16:00', '13:00', '19:00', '22:00', '14:00', '18:00', '21:00', '00:00', '14:00', '23:00', '17:00', '20:00', '22:00', '22:00', '16:00', '16:00', '19:00', '19:00', '23:00', '23:00', '17:00', '17:00', '20:00', '20:00', '16:00', '00:00', '21:00', '21:00', '16:00', '16:00', '23:00', '23:00', '20:30', '20:30', '18:00', '18:00'];
+const GS_BRT = ['16:00', '23:00', '16:00', '22:00', '01:00', '16:00', '19:00', '22:00', '14:00', '17:00', '20:00', '23:00', '13:00', '16:00', '19:00', '22:00', '14:00', '16:00', '19:00', '01:00', '14:00', '17:00', '20:00', '23:00', '13:00', '16:00', '19:00', '22:00', '01:00', '16:00', '19:00', '22:00', '14:00', '17:00', '21:00', '01:00', '13:00', '16:00', '19:00', '22:00', '14:00', '18:00', '21:00', '00:00', '14:00', '17:00', '20:00', '23:00', '16:00', '16:00', '19:00', '19:00', '22:00', '22:00', '17:00', '17:00', '20:00', '20:00', '23:00', '23:00', '16:00', '16:00', '21:00', '21:00', '00:00', '00:00', '18:00', '18:00', '20:30', '20:30', '23:00', '23:00'];
 const KO_BRT = {
   73: '16:00',
-  74: '14:00',
-  75: '17:30',
-  76: '22:00',
+  74: '17:30',
+  75: '22:00',
+  76: '14:00',
   77: '18:00',
   78: '14:00',
   79: '22:00',
@@ -930,25 +906,503 @@ const KO_BRT = {
   83: '20:00',
   84: '16:00',
   85: '00:00',
-  86: '19:00',
+  86: '17:00',
   87: '22:30',
   88: '15:00',
   89: '18:00',
   90: '14:00',
   91: '17:00',
   92: '21:00',
-  93: '16:00',
-  94: '21:00',
+  93: '15:00',
+  94: '20:00',
   95: '13:00',
   96: '17:00',
   97: '17:00',
   98: '16:00',
   99: '18:00',
-  100: '22:00',
+  100: '21:00',
   101: '16:00',
   102: '16:00',
   103: '18:00',
   104: '16:00'
+};
+const KO_DATE = {
+  73: '28/Jun',
+  74: '29/Jun',
+  75: '29/Jun',
+  76: '29/Jun',
+  77: '30/Jun',
+  78: '30/Jun',
+  79: '30/Jun',
+  80: '1/Jul',
+  81: '1/Jul',
+  82: '1/Jul',
+  83: '2/Jul',
+  84: '2/Jul',
+  85: '2/Jul',
+  86: '3/Jul',
+  87: '3/Jul',
+  88: '3/Jul',
+  89: '4/Jul',
+  90: '4/Jul',
+  91: '5/Jul',
+  92: '5/Jul',
+  93: '6/Jul',
+  94: '6/Jul',
+  95: '7/Jul',
+  96: '7/Jul',
+  97: '9/Jul',
+  98: '10/Jul',
+  99: '11/Jul',
+  100: '11/Jul',
+  101: '14/Jul',
+  102: '15/Jul',
+  103: '18/Jul',
+  104: '19/Jul'
+};
+const KO_CITY = {
+  73: 'Los Angeles',
+  74: 'Boston',
+  75: 'Monterrey',
+  76: 'Houston',
+  77: 'Nova York/NJ',
+  78: 'Dallas',
+  79: 'Cd. México',
+  80: 'Atlanta',
+  81: 'S. Francisco',
+  82: 'Seattle',
+  83: 'Toronto',
+  84: 'Los Angeles',
+  85: 'Vancouver',
+  86: 'Miami',
+  87: 'Kansas City',
+  88: 'Dallas',
+  89: 'Filadélfia',
+  90: 'Houston',
+  91: 'Nova York/NJ',
+  92: 'Cd. México',
+  93: 'Dallas',
+  94: 'Seattle',
+  95: 'Atlanta',
+  96: 'Vancouver',
+  97: 'Boston',
+  98: 'Los Angeles',
+  99: 'Miami',
+  100: 'Kansas City',
+  101: 'Dallas',
+  102: 'Atlanta',
+  103: 'Miami',
+  104: 'MetLife'
+};
+const KO_SPEC = {
+  73: {
+    h: {
+      t: 'pos',
+      g: 'A',
+      p: 2
+    },
+    a: {
+      t: 'pos',
+      g: 'B',
+      p: 2
+    },
+    l: '2A×2B',
+    ph: 'R32'
+  },
+  74: {
+    h: {
+      t: 'pos',
+      g: 'E',
+      p: 1
+    },
+    a: {
+      t: '3rd',
+      s: 'E'
+    },
+    l: '1E×3°',
+    ph: 'R32'
+  },
+  75: {
+    h: {
+      t: 'pos',
+      g: 'F',
+      p: 1
+    },
+    a: {
+      t: 'pos',
+      g: 'C',
+      p: 2
+    },
+    l: '1F×2C',
+    ph: 'R32'
+  },
+  76: {
+    h: {
+      t: 'pos',
+      g: 'C',
+      p: 1
+    },
+    a: {
+      t: 'pos',
+      g: 'F',
+      p: 2
+    },
+    l: '1C×2F',
+    ph: 'R32'
+  },
+  77: {
+    h: {
+      t: 'pos',
+      g: 'I',
+      p: 1
+    },
+    a: {
+      t: '3rd',
+      s: 'I'
+    },
+    l: '1I×3°',
+    ph: 'R32'
+  },
+  78: {
+    h: {
+      t: 'pos',
+      g: 'E',
+      p: 2
+    },
+    a: {
+      t: 'pos',
+      g: 'I',
+      p: 2
+    },
+    l: '2E×2I',
+    ph: 'R32'
+  },
+  79: {
+    h: {
+      t: 'pos',
+      g: 'A',
+      p: 1
+    },
+    a: {
+      t: '3rd',
+      s: 'A'
+    },
+    l: '1A×3°',
+    ph: 'R32'
+  },
+  80: {
+    h: {
+      t: 'pos',
+      g: 'L',
+      p: 1
+    },
+    a: {
+      t: '3rd',
+      s: 'L'
+    },
+    l: '1L×3°',
+    ph: 'R32'
+  },
+  81: {
+    h: {
+      t: 'pos',
+      g: 'D',
+      p: 1
+    },
+    a: {
+      t: '3rd',
+      s: 'D'
+    },
+    l: '1D×3°',
+    ph: 'R32'
+  },
+  82: {
+    h: {
+      t: 'pos',
+      g: 'G',
+      p: 1
+    },
+    a: {
+      t: '3rd',
+      s: 'G'
+    },
+    l: '1G×3°',
+    ph: 'R32'
+  },
+  83: {
+    h: {
+      t: 'pos',
+      g: 'K',
+      p: 2
+    },
+    a: {
+      t: 'pos',
+      g: 'L',
+      p: 2
+    },
+    l: '2K×2L',
+    ph: 'R32'
+  },
+  84: {
+    h: {
+      t: 'pos',
+      g: 'H',
+      p: 1
+    },
+    a: {
+      t: 'pos',
+      g: 'J',
+      p: 2
+    },
+    l: '1H×2J',
+    ph: 'R32'
+  },
+  85: {
+    h: {
+      t: 'pos',
+      g: 'B',
+      p: 1
+    },
+    a: {
+      t: '3rd',
+      s: 'B'
+    },
+    l: '1B×3°',
+    ph: 'R32'
+  },
+  86: {
+    h: {
+      t: 'pos',
+      g: 'J',
+      p: 1
+    },
+    a: {
+      t: 'pos',
+      g: 'H',
+      p: 2
+    },
+    l: '1J×2H',
+    ph: 'R32'
+  },
+  87: {
+    h: {
+      t: 'pos',
+      g: 'K',
+      p: 1
+    },
+    a: {
+      t: '3rd',
+      s: 'K'
+    },
+    l: '1K×3°',
+    ph: 'R32'
+  },
+  88: {
+    h: {
+      t: 'pos',
+      g: 'D',
+      p: 2
+    },
+    a: {
+      t: 'pos',
+      g: 'G',
+      p: 2
+    },
+    l: '2D×2G',
+    ph: 'R32'
+  },
+  89: {
+    h: {
+      t: 'win',
+      m: 74
+    },
+    a: {
+      t: 'win',
+      m: 77
+    },
+    l: 'W74×W77',
+    ph: 'R16'
+  },
+  90: {
+    h: {
+      t: 'win',
+      m: 73
+    },
+    a: {
+      t: 'win',
+      m: 75
+    },
+    l: 'W73×W75',
+    ph: 'R16'
+  },
+  91: {
+    h: {
+      t: 'win',
+      m: 76
+    },
+    a: {
+      t: 'win',
+      m: 78
+    },
+    l: 'W76×W78',
+    ph: 'R16'
+  },
+  92: {
+    h: {
+      t: 'win',
+      m: 79
+    },
+    a: {
+      t: 'win',
+      m: 80
+    },
+    l: 'W79×W80',
+    ph: 'R16'
+  },
+  93: {
+    h: {
+      t: 'win',
+      m: 83
+    },
+    a: {
+      t: 'win',
+      m: 84
+    },
+    l: 'W83×W84',
+    ph: 'R16'
+  },
+  94: {
+    h: {
+      t: 'win',
+      m: 81
+    },
+    a: {
+      t: 'win',
+      m: 82
+    },
+    l: 'W81×W82',
+    ph: 'R16'
+  },
+  95: {
+    h: {
+      t: 'win',
+      m: 86
+    },
+    a: {
+      t: 'win',
+      m: 88
+    },
+    l: 'W86×W88',
+    ph: 'R16'
+  },
+  96: {
+    h: {
+      t: 'win',
+      m: 85
+    },
+    a: {
+      t: 'win',
+      m: 87
+    },
+    l: 'W85×W87',
+    ph: 'R16'
+  },
+  97: {
+    h: {
+      t: 'win',
+      m: 89
+    },
+    a: {
+      t: 'win',
+      m: 90
+    },
+    l: 'W89×W90',
+    ph: 'QF'
+  },
+  98: {
+    h: {
+      t: 'win',
+      m: 93
+    },
+    a: {
+      t: 'win',
+      m: 94
+    },
+    l: 'W93×W94',
+    ph: 'QF'
+  },
+  99: {
+    h: {
+      t: 'win',
+      m: 91
+    },
+    a: {
+      t: 'win',
+      m: 92
+    },
+    l: 'W91×W92',
+    ph: 'QF'
+  },
+  100: {
+    h: {
+      t: 'win',
+      m: 95
+    },
+    a: {
+      t: 'win',
+      m: 96
+    },
+    l: 'W95×W96',
+    ph: 'QF'
+  },
+  101: {
+    h: {
+      t: 'win',
+      m: 97
+    },
+    a: {
+      t: 'win',
+      m: 98
+    },
+    l: 'W97×W98',
+    ph: 'SF'
+  },
+  102: {
+    h: {
+      t: 'win',
+      m: 99
+    },
+    a: {
+      t: 'win',
+      m: 100
+    },
+    l: 'W99×W100',
+    ph: 'SF'
+  },
+  103: {
+    h: {
+      t: 'lose',
+      m: 101
+    },
+    a: {
+      t: 'lose',
+      m: 102
+    },
+    l: '3° lugar',
+    ph: '3°'
+  },
+  104: {
+    h: {
+      t: 'win',
+      m: 101
+    },
+    a: {
+      t: 'win',
+      m: 102
+    },
+    l: 'FINAL',
+    ph: 'FIN'
+  }
 };
 let _rSys = 'fifa';
 let _customElo = {};
@@ -1050,6 +1504,145 @@ const mProbs = (a, b, tA = '', tB = '') => {
     pD: pD / t * 100,
     pA: pA / t * 100
   };
+};
+const resolveStandings = (groups, userRes, forcedPos) => {
+  const tb = {};
+  Object.entries(groups).forEach(([gn, ts]) => ts.forEach(t => {
+    tb[t] = {
+      g: gn,
+      pts: 0,
+      gf: 0,
+      ga: 0,
+      gd: 0,
+      w: 0,
+      d: 0,
+      l: 0,
+      p: 0
+    };
+  }));
+  GS.forEach(([gn, hi, ai], idx) => {
+    const fx = userRes[idx];
+    if (fx?.gA == null || fx?.gB == null) return;
+    const h = groups[gn][hi],
+      a = groups[gn][ai];
+    tb[h].gf += fx.gA;
+    tb[h].ga += fx.gB;
+    tb[h].gd += fx.gA - fx.gB;
+    tb[h].p++;
+    tb[a].gf += fx.gB;
+    tb[a].ga += fx.gA;
+    tb[a].gd += fx.gB - fx.gA;
+    tb[a].p++;
+    if (fx.gA > fx.gB) {
+      tb[h].pts += 3;
+      tb[h].w++;
+      tb[a].l++;
+    } else if (fx.gA < fx.gB) {
+      tb[a].pts += 3;
+      tb[a].w++;
+      tb[h].l++;
+    } else {
+      tb[h].pts++;
+      tb[a].pts++;
+      tb[h].d++;
+      tb[a].d++;
+    }
+  });
+  const groupReady = {};
+  const st = {};
+  Object.entries(groups).forEach(([gn, ts]) => {
+    const forced = forcedPos[gn];
+    const allPlayed = ts.every(t => tb[t].p === 3);
+    const fullForced = forced && [0, 1, 2, 3].every(i => forced[i] || forced.filter(Boolean).length === 3 && i === 3);
+    groupReady[gn] = allPlayed || forced && forced.filter(Boolean).length >= 3;
+    let s;
+    if (forced && forced.some(Boolean)) {
+      const set = forced.filter(Boolean);
+      const unset = ts.filter(t => !set.includes(t));
+      const sortedUnset = unset.sort((a, b) => tb[b].pts - tb[a].pts || tb[b].gd - tb[a].gd || tb[b].gf - tb[a].gf);
+      s = [];
+      let ui = 0;
+      for (let i = 0; i < 4; i++) {
+        if (forced[i]) s.push(forced[i]);else if (sortedUnset[ui]) s.push(sortedUnset[ui++]);
+      }
+      while (s.length < 4 && ui < sortedUnset.length) s.push(sortedUnset[ui++]);
+    } else {
+      s = ts.slice().sort((a, b) => tb[b].pts - tb[a].pts || tb[b].gd - tb[a].gd || tb[b].gf - tb[a].gf);
+    }
+    st[gn] = {
+      sorted: s
+    };
+  });
+  const allReady = Object.values(groupReady).every(Boolean);
+  const F = {},
+    S = {};
+  Object.entries(st).forEach(([g, {
+    sorted
+  }]) => {
+    if (groupReady[g]) {
+      F[g] = sorted[0];
+      S[g] = sorted[1];
+    }
+  });
+  let asgn = {},
+    b8m = {};
+  if (allReady) {
+    const thirds = Object.entries(st).map(([g, {
+      sorted
+    }]) => ({
+      team: sorted[2],
+      group: g,
+      ...tb[sorted[2]]
+    })).sort((a, b) => b.pts - a.pts || b.gd - a.gd || b.gf - a.gf);
+    const b8 = thirds.slice(0, 8);
+    const b8g = b8.map(t => t.group).sort();
+    b8m = Object.fromEntries(b8.map(t => [t.group, t.team]));
+    asgn = solve3rd(b8g);
+  }
+  return {
+    groupReady,
+    allReady,
+    F,
+    S,
+    asgn,
+    b8m,
+    tb,
+    st
+  };
+};
+const resolveKO = (standings, userRes) => {
+  const out = {};
+  for (let mn = 73; mn <= 104; mn++) {
+    const sp = KO_SPEC[mn];
+    const resSide = side => {
+      if (side.t === 'pos') return standings.groupReady[side.g] ? side.p === 1 ? standings.F[side.g] : standings.S[side.g] : null;
+      if (side.t === '3rd') return standings.allReady ? standings.b8m[standings.asgn[side.s]] || null : null;
+      if (side.t === 'win') return out[side.m]?.winner || null;
+      if (side.t === 'lose') {
+        const prev = out[side.m];
+        if (!prev || !prev.winner) return null;
+        return prev.winner === prev.h ? prev.a : prev.h;
+      }
+      return null;
+    };
+    const h = resSide(sp.h);
+    const a = resSide(sp.a);
+    const fx = userRes['k' + mn];
+    let winner = null;
+    if (fx?.gA != null && fx?.gB != null && h && a) {
+      if (fx.gA > fx.gB) winner = h;else if (fx.gA < fx.gB) winner = a;else winner = fx.pw === 'B' ? a : h;
+    }
+    out[mn] = {
+      mn,
+      h,
+      a,
+      winner,
+      fx,
+      ph: sp.ph,
+      l: sp.l
+    };
+  }
+  return out;
 };
 const runSim = (groups, ur, fp) => {
   const tb = {};
@@ -1159,7 +1752,18 @@ const runSim = (groups, ur, fp) => {
   }
   const r32 = [];
   const mk = (h, a, mn, d, c) => {
-    const r = sKO(ef(h), ef(a), h, a);
+    const fx = ur && ur['k' + mn];
+    let r;
+    if (fx && fx.gA != null && fx.gB != null && fx.home === h && fx.away === a) {
+      const w = fx.gA > fx.gB ? 'A' : fx.gA < fx.gB ? 'B' : fx.pw === 'B' ? 'B' : 'A';
+      r = {
+        gA: fx.gA,
+        gB: fx.gB,
+        w,
+        aet: false,
+        pen: fx.gA === fx.gB
+      };
+    } else r = sKO(ef(h), ef(a), h, a);
     r32.push({
       home: h,
       away: a,
@@ -1169,7 +1773,8 @@ const runSim = (groups, ur, fp) => {
       date: d,
       city: c,
       ph: pos[h],
-      pa: pos[a]
+      pa: pos[a],
+      real: !!(fx && fx.home === h && fx.away === a)
     });
   };
   mk(S['A'], S['B'], 73, '28/Jun', 'Los Angeles');
@@ -1180,16 +1785,27 @@ const runSim = (groups, ur, fp) => {
   mk(S['E'], S['I'], 78, '30/Jun', 'Dallas');
   mk(F['A'], b8m[asgn['A']], 79, '30/Jun', 'Cidade do México');
   mk(F['L'], b8m[asgn['L']], 80, '1/Jul', 'Atlanta');
-  mk(F['D'], b8m[asgn['D']], 81, '1/Jul', 'Filadélfia');
+  mk(F['D'], b8m[asgn['D']], 81, '1/Jul', 'São Francisco');
   mk(F['G'], b8m[asgn['G']], 82, '1/Jul', 'Seattle');
-  mk(S['K'], S['L'], 83, '2/Jul', 'Los Angeles');
-  mk(F['H'], S['J'], 84, '2/Jul', 'Guadalajara');
-  mk(F['B'], b8m[asgn['B']], 85, '2/Jul', 'Miami');
-  mk(F['J'], S['H'], 86, '3/Jul', 'São Francisco');
-  mk(F['K'], b8m[asgn['K']], 87, '3/Jul', 'Dallas');
-  mk(S['D'], S['G'], 88, '3/Jul', 'Kansas City');
+  mk(S['K'], S['L'], 83, '2/Jul', 'Toronto');
+  mk(F['H'], S['J'], 84, '2/Jul', 'Los Angeles');
+  mk(F['B'], b8m[asgn['B']], 85, '2/Jul', 'Vancouver');
+  mk(F['J'], S['H'], 86, '3/Jul', 'Miami');
+  mk(F['K'], b8m[asgn['K']], 87, '3/Jul', 'Kansas City');
+  mk(S['D'], S['G'], 88, '3/Jul', 'Dallas');
   const mko = (h, a, d, c, mn) => {
-    const r = sKO(efCity(h, c), efCity(a, c), h, a);
+    const fx = ur && ur['k' + mn];
+    let r;
+    if (fx && fx.gA != null && fx.gB != null && fx.home === h && fx.away === a) {
+      const w = fx.gA > fx.gB ? 'A' : fx.gA < fx.gB ? 'B' : fx.pw === 'B' ? 'B' : 'A';
+      r = {
+        gA: fx.gA,
+        gB: fx.gB,
+        w,
+        aet: false,
+        pen: fx.gA === fx.gB
+      };
+    } else r = sKO(efCity(h, c), efCity(a, c), h, a);
     return {
       home: h,
       away: a,
@@ -1199,11 +1815,12 @@ const runSim = (groups, ur, fp) => {
       city: c,
       mn,
       ph: pos[h],
-      pa: pos[a]
+      pa: pos[a],
+      real: !!(fx && fx.home === h && fx.away === a)
     };
   };
   const r16 = [mko(r32[1].winner, r32[4].winner, '4/Jul', 'Filadélfia', 89), mko(r32[0].winner, r32[2].winner, '4/Jul', 'Houston', 90), mko(r32[3].winner, r32[5].winner, '5/Jul', 'Nova York/NJ', 91), mko(r32[6].winner, r32[7].winner, '5/Jul', 'Cidade do México', 92), mko(r32[10].winner, r32[11].winner, '6/Jul', 'Dallas', 93), mko(r32[8].winner, r32[9].winner, '6/Jul', 'Seattle', 94), mko(r32[13].winner, r32[15].winner, '7/Jul', 'Atlanta', 95), mko(r32[12].winner, r32[14].winner, '7/Jul', 'Vancouver', 96)];
-  const qf = [mko(r16[0].winner, r16[1].winner, '9/Jul', 'Boston', 97), mko(r16[4].winner, r16[5].winner, '10/Jul', 'Los Angeles', 98), mko(r16[2].winner, r16[3].winner, '10/Jul', 'Miami', 99), mko(r16[6].winner, r16[7].winner, '11/Jul', 'Kansas City', 100)];
+  const qf = [mko(r16[0].winner, r16[1].winner, '9/Jul', 'Boston', 97), mko(r16[4].winner, r16[5].winner, '10/Jul', 'Los Angeles', 98), mko(r16[2].winner, r16[3].winner, '11/Jul', 'Miami', 99), mko(r16[6].winner, r16[7].winner, '11/Jul', 'Kansas City', 100)];
   const sf = [mko(qf[0].winner, qf[1].winner, '14/Jul', 'Dallas', 101), mko(qf[2].winner, qf[3].winner, '15/Jul', 'Atlanta', 102)];
   const los = sf.map(m => m.winner === m.home ? m.away : m.home);
   const f3 = mko(los[0], los[1], '18/Jul', 'Miami', 103);
@@ -1925,7 +2542,9 @@ function WC2026() {
       }
     }, m.pa))));
   };
-  const nFx = Object.keys(userRes).filter(k => userRes[k]?.gA != null && userRes[k]?.gB != null).length;
+  const nFxGS = Object.keys(userRes).filter(k => !k.startsWith('k') && userRes[k]?.gA != null && userRes[k]?.gB != null).length;
+  const nFxKO = Object.keys(userRes).filter(k => k.startsWith('k') && userRes[k]?.gA != null && userRes[k]?.gB != null).length;
+  const nFx = nFxGS + nFxKO;
   _rSys = rSys;
   _customElo = customElo;
   _ME = customME;
@@ -2625,7 +3244,7 @@ function WC2026() {
       hp: 1,
       ak: thirdAssign['D'] || '?',
       ap: 3,
-      city: 'Filadelfia',
+      city: 'S.Francisco',
       third: 'D'
     }, {
       mn: 82,
@@ -2645,7 +3264,7 @@ function WC2026() {
       hp: 2,
       ak: 'L',
       ap: 2,
-      city: 'Los Angeles'
+      city: 'Toronto'
     }, {
       mn: 84,
       h: 'H1',
@@ -2654,7 +3273,7 @@ function WC2026() {
       hp: 1,
       ak: 'J',
       ap: 2,
-      city: 'Guadalajara'
+      city: 'Los Angeles'
     }, {
       mn: 85,
       h: 'B1',
@@ -2663,7 +3282,7 @@ function WC2026() {
       hp: 1,
       ak: thirdAssign['B'] || '?',
       ap: 3,
-      city: 'Miami',
+      city: 'Vancouver',
       third: 'B'
     }, {
       mn: 86,
@@ -2673,7 +3292,7 @@ function WC2026() {
       hp: 1,
       ak: 'H',
       ap: 2,
-      city: 'S.Francisco'
+      city: 'Miami'
     }, {
       mn: 87,
       h: 'K1',
@@ -2682,7 +3301,7 @@ function WC2026() {
       hp: 1,
       ak: thirdAssign['K'] || '?',
       ap: 3,
-      city: 'Dallas',
+      city: 'Kansas City',
       third: 'K'
     }, {
       mn: 88,
@@ -2692,7 +3311,7 @@ function WC2026() {
       hp: 2,
       ak: 'G',
       ap: 2,
-      city: 'Kansas City'
+      city: 'Dallas'
     }];
     const resolveTeam = (gn, pos) => assign[gn + pos]?.t || '?';
     const getElo = t => t === '?' ? 1200 : rt(t);
@@ -2867,7 +3486,7 @@ function WC2026() {
         display: 'flex',
         justifyContent: 'space-between'
       }
-    }, React.createElement("span", null, label, " ", city), React.createElement("span", {
+    }, React.createElement("span", null, label, " ", DOW(KO_DATE[mn]), " ", KO_DATE[mn], " ", KO_BRT[mn], " ", city), React.createElement("span", {
       style: {
         color: bl,
         fontFamily: 'monospace',
@@ -4233,7 +4852,7 @@ function WC2026() {
       }, condMode && totalPct > 0 ? normPct.toFixed(1) : c.pct.toFixed(1), "%"));
     })));
   })()), muView === 'venue' && matchTmData && (() => {
-    const MATCHES = [[73, '28/Jun', 'Los Angeles', '2A×2B', 'R32'], [74, '29/Jun', 'Boston', '1E×3°', 'R32'], [75, '29/Jun', 'Monterrey', '1F×2C', 'R32'], [76, '29/Jun', 'Houston', '1C×2F', 'R32'], [77, '30/Jun', 'Nova York/NJ', '1I×3°', 'R32'], [78, '30/Jun', 'Dallas', '2E×2I', 'R32'], [79, '30/Jun', 'Cd. México', '1A×3°', 'R32'], [80, '1/Jul', 'Atlanta', '1L×3°', 'R32'], [81, '1/Jul', 'Filadélfia', '1D×3°', 'R32'], [82, '1/Jul', 'Seattle', '1G×3°', 'R32'], [83, '2/Jul', 'Los Angeles', '2K×2L', 'R32'], [84, '2/Jul', 'Guadalajara', '1H×2J', 'R32'], [85, '2/Jul', 'Miami', '1B×3°', 'R32'], [86, '3/Jul', 'S. Francisco', '1J×2H', 'R32'], [87, '3/Jul', 'Dallas', '1K×3°', 'R32'], [88, '3/Jul', 'Kansas City', '2D×2G', 'R32'], [89, '4/Jul', 'Filadélfia', 'W74×W77', 'R16'], [90, '4/Jul', 'Houston', 'W73×W75', 'R16'], [91, '5/Jul', 'Nova York/NJ', 'W76×W78', 'R16'], [92, '5/Jul', 'Cd. México', 'W79×W80', 'R16'], [93, '6/Jul', 'Dallas', 'W83×W84', 'R16'], [94, '6/Jul', 'Seattle', 'W81×W82', 'R16'], [95, '7/Jul', 'Atlanta', 'W86×W88', 'R16'], [96, '7/Jul', 'Vancouver', 'W85×W87', 'R16'], [97, '9/Jul', 'Boston', 'W89×W90', 'QF'], [98, '10/Jul', 'Los Angeles', 'W93×W94', 'QF'], [99, '10/Jul', 'Miami', 'W91×W92', 'QF'], [100, '11/Jul', 'Kansas City', 'W95×W96', 'QF'], [101, '14/Jul', 'Dallas', 'W97×W98', 'SF'], [102, '15/Jul', 'Atlanta', 'W99×W100', 'SF'], [103, '18/Jul', 'Miami', '3° lugar', '3°'], [104, '19/Jul', 'MetLife', 'FINAL', 'FIN']];
+    const MATCHES = [[73, '28/Jun', 'Los Angeles', '2A×2B', 'R32'], [74, '29/Jun', 'Boston', '1E×3°', 'R32'], [75, '29/Jun', 'Monterrey', '1F×2C', 'R32'], [76, '29/Jun', 'Houston', '1C×2F', 'R32'], [77, '30/Jun', 'Nova York/NJ', '1I×3°', 'R32'], [78, '30/Jun', 'Dallas', '2E×2I', 'R32'], [79, '30/Jun', 'Cd. México', '1A×3°', 'R32'], [80, '1/Jul', 'Atlanta', '1L×3°', 'R32'], [81, '1/Jul', 'S. Francisco', '1D×3°', 'R32'], [82, '1/Jul', 'Seattle', '1G×3°', 'R32'], [83, '2/Jul', 'Toronto', '2K×2L', 'R32'], [84, '2/Jul', 'Los Angeles', '1H×2J', 'R32'], [85, '2/Jul', 'Vancouver', '1B×3°', 'R32'], [86, '3/Jul', 'Miami', '1J×2H', 'R32'], [87, '3/Jul', 'Kansas City', '1K×3°', 'R32'], [88, '3/Jul', 'Dallas', '2D×2G', 'R32'], [89, '4/Jul', 'Filadélfia', 'W74×W77', 'R16'], [90, '4/Jul', 'Houston', 'W73×W75', 'R16'], [91, '5/Jul', 'Nova York/NJ', 'W76×W78', 'R16'], [92, '5/Jul', 'Cd. México', 'W79×W80', 'R16'], [93, '6/Jul', 'Dallas', 'W83×W84', 'R16'], [94, '6/Jul', 'Seattle', 'W81×W82', 'R16'], [95, '7/Jul', 'Atlanta', 'W86×W88', 'R16'], [96, '7/Jul', 'Vancouver', 'W85×W87', 'R16'], [97, '9/Jul', 'Boston', 'W89×W90', 'QF'], [98, '10/Jul', 'Los Angeles', 'W93×W94', 'QF'], [99, '11/Jul', 'Miami', 'W91×W92', 'QF'], [100, '11/Jul', 'Kansas City', 'W95×W96', 'QF'], [101, '14/Jul', 'Dallas', 'W97×W98', 'SF'], [102, '15/Jul', 'Atlanta', 'W99×W100', 'SF'], [103, '18/Jul', 'Miami', '3° lugar', '3°'], [104, '19/Jul', 'MetLife', 'FINAL', 'FIN']];
     const sel = MATCHES.find(m => m[0] === selMatch) || MATCHES[0];
     const [mn, date, city, struct, phase] = sel;
     const g3ins = Object.entries(g3filter).filter(([, v]) => v === 'in').map(([g]) => g);
@@ -4397,7 +5016,12 @@ function WC2026() {
         fontSize: '11px',
         color: dm
       }
-    }, DOW(date), " ", date, " \u2022 ", city)), React.createElement("div", {
+    }, DOW(date), " ", date, " \u2022 ", React.createElement("span", {
+      style: {
+        color: acc,
+        fontWeight: 600
+      }
+    }, KO_BRT[mn] || '', " BRT"), " \u2022 ", city)), React.createElement("div", {
       style: {
         fontSize: '10px',
         color: dm,
@@ -5648,7 +6272,7 @@ function WC2026() {
       color: dm,
       marginBottom: '8px'
     }
-  }, nFx, " de ", GS.length, " preenchidos. Preencha e rode a simula\xE7\xE3o."), React.createElement("div", {
+  }, nFxGS, "/", GS.length, " grupos \u2022 ", nFxKO, "/32 mata-mata preenchidos. Preencha e rode a simula\xE7\xE3o."), React.createElement("div", {
     style: {
       display: 'flex',
       gap: '3px',
@@ -5664,7 +6288,10 @@ function WC2026() {
   }, "\uD83D\uDCCA Classifica\xE7\xE3o"), React.createElement(SB, {
     active: resView === 'forced',
     onClick: () => setResView('forced')
-  }, "\uD83D\uDD12 For\xE7ar"), nFx > 0 && React.createElement("button", {
+  }, "\uD83D\uDD12 For\xE7ar"), React.createElement(SB, {
+    active: resView === 'ko',
+    onClick: () => setResView('ko')
+  }, "\uD83E\uDD4A Mata-mata"), nFx > 0 && React.createElement("button", {
     onClick: () => setUserRes({}),
     style: {
       padding: '3px 8px',
@@ -5900,7 +6527,239 @@ function WC2026() {
       key: t,
       value: t
     }, fl(t), " ", nm(t)))))));
-  }))), resView === 'games' && (() => {
+  }))), resView === 'ko' && (() => {
+    const st = resolveStandings(groups, userRes, forcedPos);
+    const ko = resolveKO(st, userRes);
+    const phaseOrder = ['R32', 'R16', 'QF', 'SF', '3°', 'FIN'];
+    const phaseLabels = {
+      R32: '1/16 (R32)',
+      R16: 'Oitavas (R16)',
+      QF: 'Quartas (QF)',
+      SF: 'Semifinais (SF)',
+      '3°': 'Terceiro lugar',
+      'FIN': 'FINAL'
+    };
+    const byPhase = {};
+    for (let mn = 73; mn <= 104; mn++) {
+      const m = ko[mn];
+      if (!byPhase[m.ph]) byPhase[m.ph] = [];
+      byPhase[m.ph].push(m);
+    }
+    const setKO = (mn, field, val) => setUserRes(p => {
+      const k = 'k' + mn;
+      const cur = {
+        ...p,
+        [k]: {
+          ...p[k],
+          [field]: val,
+          home: ko[mn].h,
+          away: ko[mn].a
+        }
+      };
+      if (val === undefined) delete cur[k][field];
+      return cur;
+    });
+    return React.createElement("div", null, React.createElement("div", {
+      style: {
+        fontSize: '10px',
+        color: dm,
+        marginBottom: '8px',
+        background: card,
+        padding: '6px 10px',
+        borderRadius: '4px',
+        border: `1px solid ${bd}`
+      }
+    }, "\uD83D\uDCA1 Os times s\xF3 aparecem ap\xF3s (a) todos os 6 jogos do grupo serem preenchidos OU (b) 3 posi\xE7\xF5es for\xE7adas na sub-aba \uD83D\uDD12. Os 3\xB0s lugares precisam de ", React.createElement("strong", null, "todos os 12 grupos"), " resolvidos. Se o placar dos 90 min \xE9 empate, escolha o vencedor nos p\xEAnaltis. Previs\xE3o est\xE1tica: % head-to-head pelo Elo/PELE/tilt atual."), phaseOrder.map(ph => byPhase[ph] && React.createElement("div", {
+      key: ph,
+      style: {
+        marginBottom: '12px'
+      }
+    }, React.createElement("div", {
+      style: {
+        fontSize: '11px',
+        fontWeight: 700,
+        color: gd,
+        padding: '3px 0',
+        borderBottom: `1px solid ${bd}33`,
+        marginBottom: '4px'
+      }
+    }, "\uD83E\uDD4A ", phaseLabels[ph]), byPhase[ph].map(m => {
+      const ready = m.h && m.a;
+      const fx = m.fx;
+      const hasFx = fx?.gA != null && fx?.gB != null;
+      const tie = hasFx && fx.gA === fx.gB;
+      const winner = m.winner;
+      const pr = ready ? mProbs(efCity(m.h, KO_CITY[m.mn]), efCity(m.a, KO_CITY[m.mn]), m.h, m.a) : null;
+      return React.createElement("div", {
+        key: m.mn,
+        style: {
+          background: card,
+          borderRadius: '5px',
+          padding: '6px 10px',
+          marginBottom: '3px',
+          border: `1px solid ${hasFx ? gn + '44' : ready ? bl + '33' : bd}`,
+          opacity: ready ? 1 : 0.55
+        }
+      }, React.createElement("div", {
+        style: {
+          display: 'flex',
+          justifyContent: 'space-between',
+          marginBottom: '3px'
+        }
+      }, React.createElement("span", {
+        style: {
+          fontSize: '9px',
+          color: dm
+        }
+      }, "M", m.mn, " \u2022 ", DOW(KO_DATE[m.mn]), " ", KO_DATE[m.mn], " \u2022 ", KO_BRT[m.mn], " BRT \u2022 ", KO_CITY[m.mn], " \u2022 ", React.createElement("span", {
+        style: {
+          color: bl
+        }
+      }, m.l)), ready && pr && React.createElement("div", {
+        style: {
+          display: 'flex',
+          gap: '6px',
+          fontSize: '9px'
+        }
+      }, React.createElement("span", {
+        style: {
+          color: gn
+        }
+      }, pr.pH.toFixed(0), "%"), React.createElement("span", {
+        style: {
+          color: dm
+        }
+      }, "E ", pr.pD.toFixed(0), "%"), React.createElement("span", {
+        style: {
+          color: bl
+        }
+      }, pr.pA.toFixed(0), "%"))), React.createElement("div", {
+        style: {
+          display: 'grid',
+          gridTemplateColumns: '1fr 90px 1fr',
+          alignItems: 'center',
+          gap: '4px'
+        }
+      }, React.createElement("div", {
+        style: {
+          textAlign: 'right',
+          fontSize: '12px',
+          fontWeight: winner === m.h ? 700 : 500,
+          color: !ready ? dm : winner === m.h ? gn : tx
+        }
+      }, ready ? `${fl(m.h)} ${nm(m.h)}` : React.createElement("span", {
+        style: {
+          fontStyle: 'italic',
+          color: dm
+        }
+      }, "aguardando\u2026")), React.createElement("div", {
+        style: {
+          display: 'flex',
+          justifyContent: 'center',
+          gap: '4px',
+          alignItems: 'center'
+        }
+      }, React.createElement("input", {
+        type: "number",
+        min: "0",
+        max: "20",
+        disabled: !ready,
+        value: fx?.gA ?? '',
+        placeholder: "-",
+        onChange: e => {
+          const v = e.target.value;
+          setKO(m.mn, 'gA', v === '' ? undefined : +v);
+        },
+        style: {
+          width: '32px',
+          padding: '3px',
+          textAlign: 'center',
+          background: ready ? '#0d111d' : '#1a1a2a',
+          color: tx,
+          border: `1px solid ${bd}`,
+          borderRadius: '4px',
+          fontSize: '13px',
+          fontWeight: 700,
+          opacity: ready ? 1 : 0.4
+        }
+      }), React.createElement("span", {
+        style: {
+          color: dm
+        }
+      }, "\xD7"), React.createElement("input", {
+        type: "number",
+        min: "0",
+        max: "20",
+        disabled: !ready,
+        value: fx?.gB ?? '',
+        placeholder: "-",
+        onChange: e => {
+          const v = e.target.value;
+          setKO(m.mn, 'gB', v === '' ? undefined : +v);
+        },
+        style: {
+          width: '32px',
+          padding: '3px',
+          textAlign: 'center',
+          background: ready ? '#0d111d' : '#1a1a2a',
+          color: tx,
+          border: `1px solid ${bd}`,
+          borderRadius: '4px',
+          fontSize: '13px',
+          fontWeight: 700,
+          opacity: ready ? 1 : 0.4
+        }
+      })), React.createElement("div", {
+        style: {
+          fontSize: '12px',
+          fontWeight: winner === m.a ? 700 : 500,
+          color: !ready ? dm : winner === m.a ? gn : tx
+        }
+      }, ready ? `${fl(m.a)} ${nm(m.a)}` : React.createElement("span", {
+        style: {
+          fontStyle: 'italic',
+          color: dm
+        }
+      }, "aguardando\u2026"))), tie && ready && React.createElement("div", {
+        style: {
+          marginTop: '4px',
+          display: 'flex',
+          justifyContent: 'center',
+          gap: '6px',
+          fontSize: '10px',
+          alignItems: 'center'
+        }
+      }, React.createElement("span", {
+        style: {
+          color: '#f97316'
+        }
+      }, "\u26A0 Empate em 90'. Vencedor p\xEAnaltis:"), React.createElement("button", {
+        onClick: () => setKO(m.mn, 'pw', 'A'),
+        style: {
+          padding: '2px 6px',
+          fontSize: '10px',
+          fontWeight: 600,
+          background: (fx.pw || 'A') === 'A' ? `${gn}33` : 'transparent',
+          color: (fx.pw || 'A') === 'A' ? gn : dm,
+          border: `1px solid ${(fx.pw || 'A') === 'A' ? gn : bd}`,
+          borderRadius: '3px',
+          cursor: 'pointer'
+        }
+      }, fl(m.h), " ", nm(m.h)), React.createElement("button", {
+        onClick: () => setKO(m.mn, 'pw', 'B'),
+        style: {
+          padding: '2px 6px',
+          fontSize: '10px',
+          fontWeight: 600,
+          background: fx.pw === 'B' ? `${gn}33` : 'transparent',
+          color: fx.pw === 'B' ? gn : dm,
+          border: `1px solid ${fx.pw === 'B' ? gn : bd}`,
+          borderRadius: '3px',
+          cursor: 'pointer'
+        }
+      }, fl(m.a), " ", nm(m.a))));
+    }))));
+  })(), resView === 'games' && (() => {
     const byDate = {};
     GS.forEach(([gn, hi, ai, date, city], idx) => {
       if (!byDate[date]) byDate[date] = [];
@@ -6939,11 +7798,11 @@ function WC2026() {
     style: {
       color: tx
     }
-  }, "Ratings:"), " (1) FIFA Ranking 19/Jan/2026, (2) Elo eloratings.net 1/Abr/2026, (3) Apostas \u2014 Elo impl\xEDcito, (4) ", React.createElement("strong", {
+  }, "Ratings:"), " (1) FIFA Ranking 1/Abr/2026, (2) Elo eloratings.net 24/Mai/2026, (3) Apostas \u2014 Elo impl\xEDcito, (4) ", React.createElement("strong", {
     style: {
       color: acc
     }
-  }, "PELE \u2014 Silver Bulletin"), " (qualidade ofensiva/defensiva agregada, escala calibrada similar ao Elo), (5) Custom \u2014 edite manualmente na aba Times. Vantagem de +", HB, "pts aplicada quando EUA/M\xE9xico/Canad\xE1 jogam em seu pr\xF3prio pa\xEDs."), React.createElement("p", null, React.createElement("strong", {
+  }, "PELE \u2014 Silver Bulletin Mai/2026"), " (qualidade ofensiva/defensiva agregada, escala calibrada similar ao Elo), (5) Custom \u2014 edite manualmente na aba Times. Vantagem de +", HB, "pts aplicada quando EUA/M\xE9xico/Canad\xE1 jogam em seu pr\xF3prio pa\xEDs."), React.createElement("p", null, React.createElement("strong", {
     style: {
       color: tx
     }
@@ -7247,12 +8106,6 @@ function WC2026() {
     }
   }, "henrique.noronha \u2022 8/mai/2026")));
 }
-try {
-  const root = ReactDOM.createRoot(document.getElementById('root'));
-  root.render(React.createElement(WC2026));
-} catch (e) {
-  document.getElementById('root').innerHTML = '<div class="err">ERRO ao renderizar: ' + e.message + '\n\n' + e.stack + '</div>';
-}
-</script>
-</body>
-</html>
+try { const root = ReactDOM.createRoot(document.getElementById('root')); root.render(React.createElement(WC2026)); }
+catch(e) { document.getElementById('root').innerHTML = '<div class="err">ERRO: '+e.message+'\n\n'+e.stack+'</div>'; }
+</script></body></html>
