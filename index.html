@@ -837,6 +837,7 @@ function solve3rd(qG) {
 }
 const GS = [['A', 0, 1, '11/Jun', 'Cidade do México'], ['A', 2, 3, '11/Jun', 'Guadalajara'], ['B', 0, 1, '12/Jun', 'Toronto'], ['D', 0, 1, '12/Jun', 'Los Angeles'], ['D', 2, 3, '13/Jun', 'Vancouver'], ['B', 2, 3, '13/Jun', 'São Francisco'], ['C', 0, 1, '13/Jun', 'Nova York/NJ'], ['C', 2, 3, '13/Jun', 'Boston'], ['E', 0, 1, '14/Jun', 'Houston'], ['F', 0, 1, '14/Jun', 'Dallas'], ['E', 2, 3, '14/Jun', 'Filadélfia'], ['F', 2, 3, '14/Jun', 'Monterrey'], ['H', 0, 1, '15/Jun', 'Atlanta'], ['G', 0, 1, '15/Jun', 'Seattle'], ['H', 2, 3, '15/Jun', 'Miami'], ['G', 2, 3, '15/Jun', 'Los Angeles'], ['J', 0, 1, '16/Jun', 'Kansas City'], ['I', 0, 1, '16/Jun', 'Nova York/NJ'], ['I', 2, 3, '16/Jun', 'Boston'], ['J', 2, 3, '17/Jun', 'São Francisco'], ['K', 0, 1, '17/Jun', 'Houston'], ['L', 0, 1, '17/Jun', 'Dallas'], ['L', 2, 3, '17/Jun', 'Toronto'], ['K', 2, 3, '17/Jun', 'Cidade do México'], ['A', 3, 1, '18/Jun', 'Atlanta'], ['B', 3, 1, '18/Jun', 'Los Angeles'], ['B', 0, 2, '18/Jun', 'Vancouver'], ['A', 0, 2, '18/Jun', 'Guadalajara'], ['D', 3, 1, '19/Jun', 'São Francisco'], ['D', 0, 2, '19/Jun', 'Seattle'], ['C', 3, 1, '19/Jun', 'Boston'], ['C', 0, 2, '19/Jun', 'Filadélfia'], ['F', 0, 2, '20/Jun', 'Houston'], ['E', 0, 2, '20/Jun', 'Toronto'], ['E', 3, 1, '20/Jun', 'Kansas City'], ['F', 3, 1, '21/Jun', 'Monterrey'], ['H', 0, 2, '21/Jun', 'Atlanta'], ['G', 0, 2, '21/Jun', 'Los Angeles'], ['H', 3, 1, '21/Jun', 'Miami'], ['G', 3, 1, '21/Jun', 'Vancouver'], ['J', 0, 2, '22/Jun', 'Dallas'], ['I', 0, 2, '22/Jun', 'Filadélfia'], ['I', 3, 1, '22/Jun', 'Nova York/NJ'], ['J', 3, 1, '23/Jun', 'São Francisco'], ['K', 0, 2, '23/Jun', 'Houston'], ['L', 0, 2, '23/Jun', 'Boston'], ['L', 3, 1, '23/Jun', 'Toronto'], ['K', 3, 1, '23/Jun', 'Guadalajara'], ['B', 3, 0, '24/Jun', 'Vancouver'], ['B', 1, 2, '24/Jun', 'Seattle'], ['C', 3, 0, '24/Jun', 'Miami'], ['C', 1, 2, '24/Jun', 'Atlanta'], ['A', 3, 0, '24/Jun', 'Cidade do México'], ['A', 1, 2, '24/Jun', 'Monterrey'], ['E', 1, 2, '25/Jun', 'Filadélfia'], ['E', 3, 0, '25/Jun', 'Nova York/NJ'], ['F', 1, 2, '25/Jun', 'Dallas'], ['F', 3, 0, '25/Jun', 'Kansas City'], ['D', 3, 0, '25/Jun', 'Los Angeles'], ['D', 1, 2, '25/Jun', 'São Francisco'], ['I', 3, 0, '26/Jun', 'Boston'], ['I', 1, 2, '26/Jun', 'Toronto'], ['H', 1, 2, '26/Jun', 'Houston'], ['H', 3, 0, '26/Jun', 'Guadalajara'], ['G', 3, 0, '27/Jun', 'Vancouver'], ['G', 1, 2, '27/Jun', 'Seattle'], ['L', 3, 0, '27/Jun', 'Nova York/NJ'], ['L', 1, 2, '27/Jun', 'Filadélfia'], ['K', 3, 0, '27/Jun', 'Miami'], ['K', 1, 2, '27/Jun', 'Atlanta'], ['J', 3, 0, '27/Jun', 'Dallas'], ['J', 1, 2, '27/Jun', 'Kansas City']];
 let _ME = 1.32;
+const BUILT_IN_RESULTS = {};
 const HB = 50;
 const CITY_COUNTRY = {
   'Los Angeles': 'USA',
@@ -1503,6 +1504,36 @@ const mProbs = (a, b, tA = '', tB = '') => {
     pH: pH / t * 100,
     pD: pD / t * 100,
     pA: pA / t * 100
+  };
+};
+const liveProbs = (a, b, tA, tB, minute, scoreA, scoreB, redsA, redsB) => {
+  const {
+    la,
+    lb
+  } = cL(a, b, matchTilt(tA, tB));
+  const remFrac = Math.max(0, Math.min(1.05, (90 - minute) / 90));
+  const adjA = Math.pow(0.78, redsA) * Math.pow(1.12, redsB);
+  const adjB = Math.pow(0.78, redsB) * Math.pow(1.12, redsA);
+  const laR = Math.max(0.001, la * remFrac * adjA);
+  const lbR = Math.max(0.001, lb * remFrac * adjB);
+  let pH = 0,
+    pD = 0,
+    pA = 0;
+  for (let i = 0; i <= 8; i++) for (let j = 0; j <= 8; j++) {
+    const p = pp(laR, i) * pp(lbR, j);
+    const fA = scoreA + i,
+      fB = scoreB + j;
+    if (fA > fB) pH += p;else if (fA === fB) pD += p;else pA += p;
+  }
+  const t = pH + pD + pA;
+  return {
+    pH: pH / t * 100,
+    pD: pD / t * 100,
+    pA: pA / t * 100,
+    laR,
+    lbR,
+    expScoreA: scoreA + laR,
+    expScoreB: scoreB + lbR
   };
 };
 const resolveStandings = (groups, userRes, forcedPos) => {
@@ -2234,6 +2265,13 @@ function WC2026() {
   const [matchPosData, setMatchPosData] = useState(null);
   const [duelPosData, setDuelPosData] = useState(null);
   const [duelExpand, setDuelExpand] = useState(null);
+  const [liveCard, setLiveCard] = useState(null);
+  const [liveInputs, setLiveInputs] = useState({});
+  const [evoData, setEvoData] = useState(null);
+  const [evoTeams, setEvoTeams] = useState(['Brazil', 'Argentina', 'Spain', 'France']);
+  const [evoMetric, setEvoMetric] = useState('ch');
+  const [evoLoading, setEvoLoading] = useState(false);
+  const [evoFilterTeam, setEvoFilterTeam] = useState('');
   const [tpcData, setTpcData] = useState(null);
   const [matchByG3Data, setMatchByG3Data] = useState(null);
   const [matchChampData, setMatchChampData] = useState(null);
@@ -2269,7 +2307,20 @@ function WC2026() {
   const [muRound, setMuRound] = useState('r32');
   const [selTeam, setSelTeam] = useState('Brazil');
   const [muView, setMuView] = useState('round');
-  const [userRes, setUserRes] = useState({});
+  const [userRes, setUserRes] = useState(() => {
+    const init = {};
+    Object.entries(BUILT_IN_RESULTS).forEach(([k, v]) => {
+      if (k.startsWith('k')) init[k] = {
+        ...v
+      };else {
+        const idx = +k - 1;
+        if (idx >= 0 && idx < GS.length) init[idx] = {
+          ...v
+        };
+      }
+    });
+    return init;
+  });
   const [forcedPos, setForcedPos] = useState({});
   const [rSys, setRSys] = useState('elo');
   const [useTilt, setUseTilt] = useState(true);
@@ -2317,6 +2368,94 @@ function WC2026() {
     _useTilt = useTilt;
     setSingle(runSim(groups, userRes, forcedPos));
     setTab('single');
+  };
+  const doEvolution = () => {
+    setEvoLoading(true);
+    setTimeout(() => {
+      _rSys = rSys;
+      _customElo = customElo;
+      _ME = customME;
+      _useTilt = useTilt;
+      const gsIdxs = [];
+      Object.keys(userRes).forEach(k => {
+        if (!k.startsWith('k')) {
+          const idx = +k;
+          const fx = userRes[k];
+          if (fx?.gA != null && fx?.gB != null) gsIdxs.push(idx);
+        }
+      });
+      gsIdxs.sort((a, b) => a - b);
+      const koMNs = [];
+      Object.keys(userRes).forEach(k => {
+        if (k.startsWith('k')) {
+          const mn = +k.slice(1);
+          const fx = userRes[k];
+          if (fx?.gA != null && fx?.gB != null) koMNs.push(mn);
+        }
+      });
+      koMNs.sort((a, b) => a - b);
+      const gsInvolves = (idx, team) => {
+        const [gn, hi, ai] = GS[idx];
+        return groups[gn][hi] === team || groups[gn][ai] === team;
+      };
+      const koInvolves = (mn, accUR, team) => {
+        const st = resolveStandings(groups, accUR, forcedPos);
+        const ko = resolveKO(st, accUR);
+        const m = ko[mn];
+        return m && (m.h === team || m.a === team);
+      };
+      const snapshots = [{
+        label: 'Início',
+        subUR: {}
+      }];
+      const accUR = {};
+      gsIdxs.forEach(idx => {
+        accUR[idx] = userRes[idx];
+        if (!evoFilterTeam || gsInvolves(idx, evoFilterTeam)) {
+          snapshots.push({
+            label: 'M' + (idx + 1),
+            subUR: {
+              ...accUR
+            }
+          });
+        }
+      });
+      koMNs.forEach(mn => {
+        const koInv = !evoFilterTeam || koInvolves(mn, accUR, evoFilterTeam);
+        accUR['k' + mn] = userRes['k' + mn];
+        if (koInv) snapshots.push({
+          label: 'M' + mn,
+          subUR: {
+            ...accUR
+          }
+        });
+      });
+      const evoSims = Math.max(300, Math.min(2000, Math.floor(nSim / 3)));
+      const result = snapshots.map(s => {
+        const r = runMC(groups, evoSims, s.subUR, forcedPos);
+        const probs = {};
+        Object.keys(r.p).forEach(t => {
+          probs[t] = {
+            ch: r.p[t].ch,
+            fin: r.p[t].fin,
+            sf: r.p[t].sf,
+            qf: r.p[t].qf,
+            r16: r.p[t].r16,
+            r32: r.p[t].r32
+          };
+        });
+        return {
+          label: s.label,
+          probs
+        };
+      });
+      setEvoData({
+        snapshots: result,
+        nSim: evoSims,
+        filterTeam: evoFilterTeam
+      });
+      setEvoLoading(false);
+    }, 50);
   };
   const loadResultsJSON = text => {
     try {
@@ -2703,7 +2842,7 @@ function WC2026() {
       overflowX: 'auto',
       borderBottom: `1px solid ${bd}`
     }
-  }, [['groups', '⚽ Times'], ['results', '📝 Resultados'], ['probs', '📊 Probs'], ['matchups', '🔀 Cruzam.'], ['single', '🎲 1 Copa'], ['info', 'ℹ️']].map(([id, l]) => React.createElement("button", {
+  }, [['groups', '⚽ Times'], ['results', '📝 Resultados'], ['probs', '📊 Probs'], ['matchups', '🔀 Cruzam.'], ['single', '🎲 1 Copa'], ['evolution', '📈 Evolução'], ['info', 'ℹ️']].map(([id, l]) => React.createElement("button", {
     key: id,
     onClick: () => setTab(id),
     style: {
@@ -6793,6 +6932,28 @@ function WC2026() {
         const pr = mProbs(efCity(m.home, m.city), efCity(m.away, m.city), m.home, m.away);
         const fx = userRes[m.idx];
         const hasFx = fx?.gA != null && fx?.gB != null;
+        const isLive = liveCard === m.idx;
+        const li = liveInputs[m.idx] || {
+          min: 0,
+          gA: 0,
+          gB: 0,
+          redsA: 0,
+          redsB: 0
+        };
+        const liveP = isLive ? liveProbs(efCity(m.home, m.city), efCity(m.away, m.city), m.home, m.away, +li.min || 0, +li.gA || 0, +li.gB || 0, +li.redsA || 0, +li.redsB || 0) : null;
+        const setLI = (field, val) => setLiveInputs(p => ({
+          ...p,
+          [m.idx]: {
+            ...(p[m.idx] || {
+              min: 0,
+              gA: 0,
+              gB: 0,
+              redsA: 0,
+              redsB: 0
+            }),
+            [field]: val
+          }
+        }));
         return React.createElement("div", {
           key: m.idx,
           style: {
@@ -6800,20 +6961,23 @@ function WC2026() {
             borderRadius: '5px',
             padding: '6px 10px',
             marginBottom: '3px',
-            border: `1px solid ${hasFx ? gn + '44' : bd}`
+            border: `1px solid ${isLive ? acc : hasFx ? gn + '44' : bd}`
           }
         }, React.createElement("div", {
+          onClick: () => setLiveCard(isLive ? null : m.idx),
           style: {
             display: 'flex',
             justifyContent: 'space-between',
-            marginBottom: '3px'
+            marginBottom: '3px',
+            cursor: 'pointer',
+            userSelect: 'none'
           }
         }, React.createElement("span", {
           style: {
             fontSize: '9px',
             color: dm
           }
-        }, "G", m.gn, " \u2022 ", GS_BRT[m.idx], " BRT \u2022 ", m.city), React.createElement("div", {
+        }, isLive ? '▼' : '▶', " Grupo ", m.gn, " \u2022 ", GS_BRT[m.idx], " BRT \u2022 ", m.city), React.createElement("div", {
           style: {
             display: 'flex',
             gap: '6px',
@@ -6914,7 +7078,287 @@ function WC2026() {
             fontSize: '12px',
             fontWeight: 500
           }
-        }, fl(m.away), " ", nm(m.away))));
+        }, fl(m.away), " ", nm(m.away))), isLive && React.createElement("div", {
+          style: {
+            marginTop: '8px',
+            padding: '8px 10px',
+            background: '#0d111d',
+            borderRadius: '4px',
+            border: `1px solid ${acc}33`
+          }
+        }, React.createElement("div", {
+          style: {
+            fontSize: '10px',
+            fontWeight: 700,
+            color: acc,
+            marginBottom: '6px'
+          }
+        }, "\u23F1\uFE0F Probabilidade ao vivo"), React.createElement("div", {
+          style: {
+            display: 'grid',
+            gridTemplateColumns: 'auto 1fr auto auto auto auto',
+            gap: '6px',
+            alignItems: 'center',
+            fontSize: '10px',
+            marginBottom: '6px'
+          }
+        }, React.createElement("span", {
+          style: {
+            color: dm
+          }
+        }, "Min:"), React.createElement("input", {
+          type: "range",
+          min: "0",
+          max: "95",
+          value: li.min,
+          onChange: e => setLI('min', +e.target.value),
+          style: {
+            width: '100%'
+          }
+        }), React.createElement("span", {
+          style: {
+            fontWeight: 700,
+            color: acc,
+            minWidth: '32px'
+          }
+        }, li.min, "'"), React.createElement("button", {
+          onClick: () => setLI('min', 0),
+          style: {
+            padding: '1px 6px',
+            fontSize: '9px',
+            background: 'transparent',
+            color: dm,
+            border: `1px solid ${bd}`,
+            borderRadius: '3px',
+            cursor: 'pointer'
+          }
+        }, "0'"), React.createElement("button", {
+          onClick: () => setLI('min', 45),
+          style: {
+            padding: '1px 6px',
+            fontSize: '9px',
+            background: 'transparent',
+            color: dm,
+            border: `1px solid ${bd}`,
+            borderRadius: '3px',
+            cursor: 'pointer'
+          }
+        }, "HT"), React.createElement("button", {
+          onClick: () => setLI('min', 90),
+          style: {
+            padding: '1px 6px',
+            fontSize: '9px',
+            background: 'transparent',
+            color: dm,
+            border: `1px solid ${bd}`,
+            borderRadius: '3px',
+            cursor: 'pointer'
+          }
+        }, "FT")), React.createElement("div", {
+          style: {
+            display: 'grid',
+            gridTemplateColumns: '1fr 1fr',
+            gap: '12px',
+            marginBottom: '8px'
+          }
+        }, React.createElement("div", null, React.createElement("div", {
+          style: {
+            fontSize: '9px',
+            color: dm,
+            marginBottom: '3px',
+            textAlign: 'center'
+          }
+        }, fl(m.home), " ", nm(m.home)), React.createElement("div", {
+          style: {
+            display: 'flex',
+            justifyContent: 'center',
+            gap: '4px',
+            alignItems: 'center',
+            fontSize: '9px'
+          }
+        }, React.createElement("span", {
+          style: {
+            color: dm
+          }
+        }, "Gols:"), React.createElement("input", {
+          type: "number",
+          min: "0",
+          max: "20",
+          value: li.gA,
+          onChange: e => setLI('gA', +e.target.value || 0),
+          style: {
+            width: '36px',
+            padding: '2px',
+            textAlign: 'center',
+            background: card,
+            color: tx,
+            border: `1px solid ${bd}`,
+            borderRadius: '3px',
+            fontSize: '11px',
+            fontWeight: 700
+          }
+        }), React.createElement("span", {
+          style: {
+            color: dm,
+            marginLeft: '4px'
+          }
+        }, "\uD83D\uDFE5"), React.createElement("input", {
+          type: "number",
+          min: "0",
+          max: "3",
+          value: li.redsA,
+          onChange: e => setLI('redsA', +e.target.value || 0),
+          style: {
+            width: '32px',
+            padding: '2px',
+            textAlign: 'center',
+            background: card,
+            color: tx,
+            border: `1px solid ${bd}`,
+            borderRadius: '3px',
+            fontSize: '11px'
+          }
+        }))), React.createElement("div", null, React.createElement("div", {
+          style: {
+            fontSize: '9px',
+            color: dm,
+            marginBottom: '3px',
+            textAlign: 'center'
+          }
+        }, fl(m.away), " ", nm(m.away)), React.createElement("div", {
+          style: {
+            display: 'flex',
+            justifyContent: 'center',
+            gap: '4px',
+            alignItems: 'center',
+            fontSize: '9px'
+          }
+        }, React.createElement("span", {
+          style: {
+            color: dm
+          }
+        }, "Gols:"), React.createElement("input", {
+          type: "number",
+          min: "0",
+          max: "20",
+          value: li.gB,
+          onChange: e => setLI('gB', +e.target.value || 0),
+          style: {
+            width: '36px',
+            padding: '2px',
+            textAlign: 'center',
+            background: card,
+            color: tx,
+            border: `1px solid ${bd}`,
+            borderRadius: '3px',
+            fontSize: '11px',
+            fontWeight: 700
+          }
+        }), React.createElement("span", {
+          style: {
+            color: dm,
+            marginLeft: '4px'
+          }
+        }, "\uD83D\uDFE5"), React.createElement("input", {
+          type: "number",
+          min: "0",
+          max: "3",
+          value: li.redsB,
+          onChange: e => setLI('redsB', +e.target.value || 0),
+          style: {
+            width: '32px',
+            padding: '2px',
+            textAlign: 'center',
+            background: card,
+            color: tx,
+            border: `1px solid ${bd}`,
+            borderRadius: '3px',
+            fontSize: '11px'
+          }
+        })))), React.createElement("div", {
+          style: {
+            display: 'grid',
+            gridTemplateColumns: '1fr 1fr 1fr',
+            gap: '4px',
+            fontSize: '10px',
+            marginBottom: '6px'
+          }
+        }, React.createElement("div", {
+          style: {
+            background: `${gn}22`,
+            padding: '4px',
+            borderRadius: '3px',
+            textAlign: 'center',
+            border: `1px solid ${gn}44`
+          }
+        }, React.createElement("div", {
+          style: {
+            fontSize: '8px',
+            color: dm
+          }
+        }, "V ", nm(m.home).slice(0, 8)), React.createElement("div", {
+          style: {
+            fontSize: '14px',
+            fontWeight: 700,
+            color: gn
+          }
+        }, liveP.pH.toFixed(1), "%")), React.createElement("div", {
+          style: {
+            background: `${dm}22`,
+            padding: '4px',
+            borderRadius: '3px',
+            textAlign: 'center',
+            border: `1px solid ${bd}`
+          }
+        }, React.createElement("div", {
+          style: {
+            fontSize: '8px',
+            color: dm
+          }
+        }, "Empate"), React.createElement("div", {
+          style: {
+            fontSize: '14px',
+            fontWeight: 700,
+            color: tx
+          }
+        }, liveP.pD.toFixed(1), "%")), React.createElement("div", {
+          style: {
+            background: `${bl}22`,
+            padding: '4px',
+            borderRadius: '3px',
+            textAlign: 'center',
+            border: `1px solid ${bl}44`
+          }
+        }, React.createElement("div", {
+          style: {
+            fontSize: '8px',
+            color: dm
+          }
+        }, "V ", nm(m.away).slice(0, 8)), React.createElement("div", {
+          style: {
+            fontSize: '14px',
+            fontWeight: 700,
+            color: bl
+          }
+        }, liveP.pA.toFixed(1), "%"))), React.createElement("div", {
+          style: {
+            fontSize: '9px',
+            color: dm,
+            textAlign: 'center'
+          }
+        }, "Placar final esperado: ", React.createElement("strong", {
+          style: {
+            color: tx
+          }
+        }, liveP.expScoreA.toFixed(1), " - ", liveP.expScoreB.toFixed(1)), " \u2022 \u03BB restante: ", liveP.laR.toFixed(2), "/", liveP.lbR.toFixed(2), " gols"), React.createElement("div", {
+          style: {
+            fontSize: '8px',
+            color: dm,
+            marginTop: '4px',
+            textAlign: 'center',
+            fontStyle: 'italic'
+          }
+        }, "Modelo: gols restantes \u221D tempo restante; cada cart\xE3o vermelho aplica 0.78\xD7 ao infrator e 1.12\xD7 ao advers\xE1rio.")));
       }));
     });
   })()), tab === 'single' && (!single ? React.createElement("div", {
@@ -7582,7 +8026,378 @@ function WC2026() {
   }, React.createElement(KO, {
     m: single.fin,
     sp: true
-  }))))), tab === 'info' && React.createElement("div", {
+  }))))), tab === 'evolution' && React.createElement("div", {
+    style: cs
+  }, React.createElement("div", {
+    style: {
+      fontSize: '13px',
+      fontWeight: 700,
+      marginBottom: '4px',
+      color: acc
+    }
+  }, "\uD83D\uDCC8 Evolu\xE7\xE3o das chances"), React.createElement("div", {
+    style: {
+      fontSize: '10px',
+      color: dm,
+      marginBottom: '10px'
+    }
+  }, "Como as probabilidades de cada sele\xE7\xE3o mudaram conforme os resultados foram saindo. Cada ponto = um snapshot (Monte Carlo recalculado ap\xF3s cada jogo com placar)."), React.createElement("div", {
+    style: {
+      background: card,
+      padding: '8px 10px',
+      borderRadius: '5px',
+      border: `1px solid ${bd}`,
+      marginBottom: '10px'
+    }
+  }, React.createElement("div", {
+    style: {
+      display: 'flex',
+      flexWrap: 'wrap',
+      gap: '8px',
+      alignItems: 'center',
+      marginBottom: '8px'
+    }
+  }, React.createElement("span", {
+    style: {
+      fontSize: '10px',
+      color: dm,
+      fontWeight: 600
+    }
+  }, "M\xE9trica:"), [['ch', '🏆 Campeão'], ['fin', '🥇 Final'], ['sf', '🥈 Semi'], ['qf', '🥉 Quartas'], ['r16', 'R16'], ['r32', 'R32 (passar GS)']].map(([k, l]) => React.createElement("button", {
+    key: k,
+    onClick: () => setEvoMetric(k),
+    style: {
+      padding: '3px 8px',
+      fontSize: '10px',
+      fontWeight: 600,
+      background: evoMetric === k ? `${acc}33` : 'transparent',
+      color: evoMetric === k ? acc : dm,
+      border: `1px solid ${evoMetric === k ? acc : bd}`,
+      borderRadius: '3px',
+      cursor: 'pointer'
+    }
+  }, l))), React.createElement("div", {
+    style: {
+      display: 'flex',
+      flexWrap: 'wrap',
+      gap: '6px',
+      alignItems: 'center'
+    }
+  }, React.createElement("span", {
+    style: {
+      fontSize: '10px',
+      color: dm,
+      fontWeight: 600
+    }
+  }, "Times (at\xE9 6):"), React.createElement("select", {
+    onChange: e => {
+      const t = e.target.value;
+      if (t && !evoTeams.includes(t) && evoTeams.length < 6) setEvoTeams([...evoTeams, t]);
+      e.target.value = '';
+    },
+    style: {
+      padding: '3px 6px',
+      background: '#0d111d',
+      color: tx,
+      border: `1px solid ${bd}`,
+      borderRadius: '3px',
+      fontSize: '10px'
+    }
+  }, React.createElement("option", {
+    value: ""
+  }, "+ adicionar..."), Object.values(groups).flat().filter(t => !evoTeams.includes(t)).map(t => React.createElement("option", {
+    key: t,
+    value: t
+  }, fl(t), " ", nm(t)))), evoTeams.map((t, i) => {
+    const colors = ['#ef4444', '#3b82f6', '#22c55e', '#f59e0b', '#a855f7', '#06b6d4'];
+    return React.createElement("span", {
+      key: t,
+      style: {
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: '3px',
+        padding: '2px 6px',
+        background: colors[i] + '22',
+        border: `1px solid ${colors[i]}66`,
+        borderRadius: '3px',
+        fontSize: '10px'
+      }
+    }, React.createElement("span", {
+      style: {
+        width: '6px',
+        height: '6px',
+        background: colors[i],
+        borderRadius: '50%'
+      }
+    }), React.createElement("span", {
+      style: {
+        color: tx
+      }
+    }, fl(t), " ", nm(t)), React.createElement("button", {
+      onClick: () => setEvoTeams(evoTeams.filter(x => x !== t)),
+      style: {
+        marginLeft: '2px',
+        background: 'transparent',
+        border: 'none',
+        color: dm,
+        cursor: 'pointer',
+        fontSize: '11px',
+        padding: 0
+      }
+    }, "\xD7"));
+  })), React.createElement("div", {
+    style: {
+      display: 'flex',
+      flexWrap: 'wrap',
+      gap: '6px',
+      alignItems: 'center',
+      marginTop: '8px'
+    }
+  }, React.createElement(Tip, {
+    text: "Por padr\xE3o, gera um snapshot ap\xF3s cada jogo com resultado. Escolha um time para gerar snapshots apenas ap\xF3s os jogos desse time (gr\xE1fico mais limpo para a trajet\xF3ria dele)."
+  }, React.createElement("span", {
+    style: {
+      fontSize: '10px',
+      color: dm,
+      fontWeight: 600
+    }
+  }, "Snapshots ap\xF3s jogos de:")), React.createElement("select", {
+    value: evoFilterTeam,
+    onChange: e => setEvoFilterTeam(e.target.value),
+    style: {
+      padding: '3px 6px',
+      background: '#0d111d',
+      color: evoFilterTeam ? acc : tx,
+      border: `1px solid ${evoFilterTeam ? acc : bd}`,
+      borderRadius: '3px',
+      fontSize: '10px',
+      fontWeight: evoFilterTeam ? 600 : 400
+    }
+  }, React.createElement("option", {
+    value: ""
+  }, "\u2014 Todos os jogos \u2014"), evoTeams.map(t => React.createElement("option", {
+    key: t,
+    value: t
+  }, fl(t), " ", nm(t), " (selecionado)")), React.createElement("option", {
+    disabled: true
+  }, "\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500"), Object.values(groups).flat().filter(t => !evoTeams.includes(t)).sort((a, b) => nm(a).localeCompare(nm(b))).map(t => React.createElement("option", {
+    key: t,
+    value: t
+  }, fl(t), " ", nm(t)))), evoFilterTeam && React.createElement("span", {
+    style: {
+      fontSize: '9px',
+      color: dm,
+      fontStyle: 'italic'
+    }
+  }, "(somente jogos com ", nm(evoFilterTeam), ")"))), React.createElement("button", {
+    onClick: doEvolution,
+    disabled: evoLoading || nFx === 0,
+    style: {
+      padding: '8px 14px',
+      fontSize: '11px',
+      fontWeight: 700,
+      background: nFx === 0 ? '#1a1a2a' : `${acc}33`,
+      color: nFx === 0 ? dm : acc,
+      border: `1px solid ${nFx === 0 ? bd : acc}`,
+      borderRadius: '4px',
+      cursor: nFx === 0 ? 'not-allowed' : 'pointer',
+      marginBottom: '10px'
+    }
+  }, evoLoading ? '⏳ Calculando snapshots...' : nFx === 0 ? '⚠ Preencha resultados primeiro' : `📊 Calcular evolução (${nFx} jogos preenchidos)`), evoData && evoData.snapshots.length > 1 && (() => {
+    const W = 800,
+      H = 360,
+      PAD = {
+        l: 50,
+        r: 20,
+        t: 20,
+        b: 50
+      };
+    const plotW = W - PAD.l - PAD.r,
+      plotH = H - PAD.t - PAD.b;
+    const xs = evoData.snapshots.map((_, i) => i);
+    const maxIdx = xs.length - 1;
+    const xScale = i => maxIdx === 0 ? PAD.l + plotW / 2 : PAD.l + i / maxIdx * plotW;
+    const yScale = p => PAD.t + plotH - p / 100 * plotH;
+    const colors = ['#ef4444', '#3b82f6', '#22c55e', '#f59e0b', '#a855f7', '#06b6d4'];
+    const gridYs = [0, 20, 40, 60, 80, 100];
+    return React.createElement("div", {
+      style: {
+        background: card,
+        padding: '10px',
+        borderRadius: '6px',
+        border: `1px solid ${bd}`,
+        overflowX: 'auto'
+      }
+    }, React.createElement("div", {
+      style: {
+        fontSize: '10px',
+        color: dm,
+        marginBottom: '6px'
+      }
+    }, evoData.nSim.toLocaleString(), " sims por snapshot \u2022 ", evoData.snapshots.length, " pontos"), React.createElement("svg", {
+      viewBox: `0 0 ${W} ${H}`,
+      style: {
+        width: '100%',
+        height: 'auto',
+        maxHeight: '420px',
+        display: 'block'
+      }
+    }, gridYs.map(g => React.createElement("g", {
+      key: g
+    }, React.createElement("line", {
+      x1: PAD.l,
+      x2: W - PAD.r,
+      y1: yScale(g),
+      y2: yScale(g),
+      stroke: bd,
+      strokeWidth: "0.5"
+    }), React.createElement("text", {
+      x: PAD.l - 6,
+      y: yScale(g) + 3,
+      fontSize: "9",
+      fill: dm,
+      textAnchor: "end"
+    }, g, "%"))), xs.map(i => (i === 0 || i === maxIdx || i % Math.max(1, Math.ceil(maxIdx / 12)) === 0) && React.createElement("text", {
+      key: i,
+      x: xScale(i),
+      y: H - PAD.b + 14,
+      fontSize: "8",
+      fill: dm,
+      textAnchor: "middle",
+      transform: `rotate(-30 ${xScale(i)} ${H - PAD.b + 14})`
+    }, evoData.snapshots[i].label)), React.createElement("line", {
+      x1: PAD.l,
+      x2: W - PAD.r,
+      y1: H - PAD.b,
+      y2: H - PAD.b,
+      stroke: tx,
+      strokeWidth: "1"
+    }), React.createElement("line", {
+      x1: PAD.l,
+      x2: PAD.l,
+      y1: PAD.t,
+      y2: H - PAD.b,
+      stroke: tx,
+      strokeWidth: "1"
+    }), evoTeams.map((t, ti) => {
+      const pts = xs.map(i => ({
+        x: xScale(i),
+        y: yScale(evoData.snapshots[i].probs[t]?.[evoMetric] ?? 0),
+        v: evoData.snapshots[i].probs[t]?.[evoMetric] ?? 0
+      }));
+      const path = pts.map((p, i) => (i === 0 ? 'M' : 'L') + p.x + ',' + p.y).join(' ');
+      return React.createElement("g", {
+        key: t
+      }, React.createElement("path", {
+        d: path,
+        stroke: colors[ti],
+        strokeWidth: "2",
+        fill: "none"
+      }), pts.map((p, i) => React.createElement("circle", {
+        key: i,
+        cx: p.x,
+        cy: p.y,
+        r: "2.5",
+        fill: colors[ti]
+      })), React.createElement("text", {
+        x: pts[pts.length - 1].x + 4,
+        y: pts[pts.length - 1].y + 3,
+        fontSize: "9",
+        fill: colors[ti],
+        fontWeight: "700"
+      }, pts[pts.length - 1].v.toFixed(0), "%"));
+    })), React.createElement("div", {
+      style: {
+        marginTop: '10px',
+        overflowX: 'auto'
+      }
+    }, React.createElement("table", {
+      style: {
+        width: '100%',
+        fontSize: '10px',
+        borderCollapse: 'collapse'
+      }
+    }, React.createElement("thead", null, React.createElement("tr", {
+      style: {
+        background: '#0d111d'
+      }
+    }, React.createElement("th", {
+      style: {
+        padding: '4px',
+        textAlign: 'left',
+        color: dm,
+        fontWeight: 600
+      }
+    }, "Sele\xE7\xE3o"), evoData.snapshots.map((s, i) => (i === 0 || i === evoData.snapshots.length - 1 || i % Math.max(1, Math.ceil(maxIdx / 8)) === 0) && React.createElement("th", {
+      key: i,
+      style: {
+        padding: '4px',
+        textAlign: 'right',
+        color: dm,
+        fontWeight: 600,
+        fontSize: '9px'
+      }
+    }, s.label)), React.createElement("th", {
+      style: {
+        padding: '4px',
+        textAlign: 'right',
+        color: acc,
+        fontWeight: 700
+      }
+    }, "\u0394"))), React.createElement("tbody", null, evoTeams.map((t, ti) => {
+      const colors = ['#ef4444', '#3b82f6', '#22c55e', '#f59e0b', '#a855f7', '#06b6d4'];
+      const first = evoData.snapshots[0].probs[t]?.[evoMetric] ?? 0;
+      const last = evoData.snapshots[evoData.snapshots.length - 1].probs[t]?.[evoMetric] ?? 0;
+      const delta = last - first;
+      return React.createElement("tr", {
+        key: t,
+        style: {
+          borderBottom: `1px solid ${bd}33`
+        }
+      }, React.createElement("td", {
+        style: {
+          padding: '4px'
+        }
+      }, React.createElement("span", {
+        style: {
+          display: 'inline-block',
+          width: '6px',
+          height: '6px',
+          background: colors[ti],
+          borderRadius: '50%',
+          marginRight: '4px'
+        }
+      }), fl(t), " ", nm(t)), evoData.snapshots.map((s, i) => (i === 0 || i === evoData.snapshots.length - 1 || i % Math.max(1, Math.ceil(maxIdx / 8)) === 0) && React.createElement("td", {
+        key: i,
+        style: {
+          padding: '4px',
+          textAlign: 'right',
+          color: tx
+        }
+      }, (s.probs[t]?.[evoMetric] ?? 0).toFixed(1))), React.createElement("td", {
+        style: {
+          padding: '4px',
+          textAlign: 'right',
+          fontWeight: 700,
+          color: delta > 1 ? gn : delta < -1 ? rd : dm
+        }
+      }, delta > 0 ? '+' : '', delta.toFixed(1)));
+    })))));
+  })(), evoData && evoData.snapshots.length <= 1 && React.createElement("div", {
+    style: {
+      padding: '20px',
+      textAlign: 'center',
+      color: dm,
+      fontSize: '11px'
+    }
+  }, "Apenas 1 snapshot dispon\xEDvel. Preencha mais resultados para ver evolu\xE7\xE3o."), !evoData && !evoLoading && React.createElement("div", {
+    style: {
+      padding: '20px',
+      textAlign: 'center',
+      color: dm,
+      fontSize: '11px'
+    }
+  }, "Preencha resultados na aba \uD83D\uDCDD Resultados e clique em \"Calcular evolu\xE7\xE3o\" para ver como as chances mudam.")), tab === 'info' && React.createElement("div", {
     style: {
       ...cs,
       maxWidth: '700px'
@@ -7637,6 +8452,50 @@ function WC2026() {
       color: acc
     }
   }, "d) Acompanhe a Copa em tempo real."), " Preencha resultados reais na aba Resultados e force classifica\xE7\xF5es nos grupos. Rode a simula\xE7\xE3o novamente e veja como as probabilidades evoluem jogo a jogo. Cada resultado atualiza o bracket, as chances de t\xEDtulo e os cruzamentos."), React.createElement("p", {
+    style: {
+      color: tx
+    }
+  }, React.createElement("strong", {
+    style: {
+      color: acc
+    }
+  }, "e) Probabilidade ao vivo (intra-jogo)."), " Na aba \uD83D\uDCDD Resultados, clique em qualquer card de jogo para expandir e calcular as chances V/E/D considerando o minuto atual, o placar parcial e cart\xF5es vermelhos. Modelo: gols restantes esperados s\xE3o proporcionais ao tempo restante; cada vermelho aplica 0.78\xD7 ao infrator e 1.12\xD7 ao advers\xE1rio sobre o \u03BB (Poisson)."), React.createElement("p", {
+    style: {
+      color: tx
+    }
+  }, React.createElement("strong", {
+    style: {
+      color: acc
+    }
+  }, "f) Aba \uD83D\uDCC8 Evolu\xE7\xE3o."), " Ap\xF3s preencher alguns resultados, v\xE1 em \uD83D\uDCC8 Evolu\xE7\xE3o, escolha m\xE9trica (campe\xE3o/semi/QF/R16/passar de grupo) e at\xE9 6 sele\xE7\xF5es, e clique em \"Calcular evolu\xE7\xE3o\". O simulador roda um MC ap\xF3s cada jogo preenchido e mostra como as chances de cada time mudaram ao longo da Copa."), React.createElement("p", {
+    style: {
+      color: tx
+    }
+  }, React.createElement("strong", {
+    style: {
+      color: acc
+    }
+  }, "g) Resultados fixos no c\xF3digo."), " Para resultados j\xE1 oficiais, edite a constante ", React.createElement("code", {
+    style: {
+      color: bl,
+      fontSize: '9px'
+    }
+  }, "BUILT_IN_RESULTS"), " no topo do arquivo. Formato: ", React.createElement("code", {
+    style: {
+      color: bl,
+      fontSize: '9px'
+    }
+  }, '{1:{gA:1,gB:0}, 2:{gA:2,gB:1}, "k73":{gA:1,gB:1,pw:"B"}}'), ". Chaves num\xE9ricas (1-72) = fase de grupos; chaves ", React.createElement("code", {
+    style: {
+      color: bl,
+      fontSize: '9px'
+    }
+  }, "'kNN'"), " = mata-mata (73-104). ", React.createElement("code", {
+    style: {
+      color: bl,
+      fontSize: '9px'
+    }
+  }, "pw"), " opcional = vencedor p\xEAnaltis ('A' ou 'B')."), React.createElement("p", {
     style: {
       color: tx
     }
