@@ -1,0 +1,2 @@
+- [Setup memória + git multi-PC](setup-memoria-e-git-multi-pc.md) — 2 PCs, junction p/ .memory versionada, fluxo pull/push
+- [Build .jsx → index.html](build-jsx-gera-index-html.md) — index.html é o bundle esbuild da fonte; commitar juntos
