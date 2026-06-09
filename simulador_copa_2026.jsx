@@ -1716,6 +1716,7 @@ export default function WC2026() {
               <SB active={muView === 'scores'} onClick={() => setMuView('scores')}>Placares</SB>
               <SB active={muView === 'tie'} onClick={() => setMuView('tie')}>Desempate</SB>
               <SB active={muView === 'confronto'} onClick={() => setMuView('confronto')}>Confronto</SB>
+              <SB active={muView === 'path'} onClick={() => setMuView('path')}>Path</SB>
             </div>
 
             {muView === 'round' && (<>
@@ -2939,6 +2940,74 @@ export default function WC2026() {
                   </>}
                 </div>
               );
+            })()}
+            {muView === 'path' && (() => {
+              if (!tpcData) return <div style={{ padding: '24px', textAlign: 'center', color: dm, fontSize: '12px' }}>Rode a simulação.</div>;
+              const RDS = [['r32', 'R32'], ['r16', 'R16'], ['qf', 'QF'], ['sf', 'SF'], ['fin', 'Final']];
+              const posLabel = { '1': '1°', '2': '2°', '3': '3°' };
+              const teams = all.slice().sort((a, b) => (res?.[b]?.ch || 0) - (res?.[a]?.ch || 0));
+              return (<>
+                <div style={{ fontSize: '9px', color: dm, marginBottom: '10px' }}>
+                  Para cada time e cada posição no grupo (1°/2°/3°): o adversário mais provável em cada fase do mata-mata (com a % de enfrentá-lo, dado que chegou à fase) e a chance condicional de título se terminar naquela posição. Empilhado, ordenado por chance de título.
+                </div>
+                <div style={{ display: 'grid', gap: '10px' }}>
+                  {teams.map(team => {
+                    const tp = tpcData[team] || {};
+                    const grp = Object.entries(groups).find(([, ts]) => ts.includes(team))?.[0];
+                    const totalForTeam = Object.values(tp).reduce((s, d) => s + (d.n || 0), 0);
+                    if (!grp || totalForTeam === 0) return null;
+                    const overall = (res?.[team]?.ch || 0);
+                    const rows = ['1', '2', '3'].map(pn => {
+                      const d = tp[grp + pn];
+                      if (!d || !d.n) return null;
+                      const finishFreq = (d.n / totalForTeam) * 100;
+                      const condCh = (d.ch / d.n) * 100;
+                      const path = RDS.map(([rk]) => {
+                        const ent = Object.entries(d[rk] || {});
+                        if (!ent.length) return null;
+                        ent.sort((a, b) => b[1] - a[1]);
+                        const [opp, cnt] = ent[0];
+                        const reached = ent.reduce((s, [, c]) => s + c, 0);
+                        return { opp, faceProb: reached ? (cnt / reached) * 100 : 0 };
+                      });
+                      return { pn, finishFreq, condCh, path };
+                    }).filter(Boolean);
+                    if (!rows.length) return null;
+                    return (
+                      <div key={team} style={{ background: card, borderRadius: '6px', padding: '8px 10px', border: `1px solid ${bd}` }}>
+                        <div style={{ fontSize: '13px', fontWeight: 700, marginBottom: '6px', display: 'flex', alignItems: 'baseline', gap: '6px', flexWrap: 'wrap' }}>
+                          {fl(team)} {nm(team)}
+                          <span style={{ color: gd, fontSize: '11px' }}>🏆 {overall.toFixed(1)}%</span>
+                          <span style={{ color: dm, fontSize: '9px' }}>grupo {grp}</span>
+                        </div>
+                        <div style={{ display: 'grid', gap: '4px' }}>
+                          {rows.map(r => (
+                            <div key={r.pn} style={{ display: 'grid', gridTemplateColumns: '128px 1fr', gap: '8px', alignItems: 'center', padding: '4px 6px', background: '#0d111d', borderRadius: '4px' }}>
+                              <div style={{ fontSize: '10px' }}>
+                                <span style={{ fontWeight: 700, color: acc }}>{posLabel[r.pn]}</span>
+                                <span style={{ color: dm }}> · termina {r.finishFreq.toFixed(0)}%</span>
+                                <div style={{ color: gd, fontWeight: 700, fontSize: '11px' }}>🏆 {r.condCh.toFixed(1)}%</div>
+                              </div>
+                              <div style={{ fontSize: '10px', display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '2px' }}>
+                                {RDS.map(([rk, rl], j) => {
+                                  const step = r.path[j];
+                                  return (
+                                    <span key={rk} style={{ whiteSpace: 'nowrap', display: 'inline-flex', alignItems: 'center' }}>
+                                      {j > 0 && <span style={{ color: dm, margin: '0 3px' }}>→</span>}
+                                      <span style={{ color: dm, fontSize: '8px', marginRight: '2px' }}>{rl}</span>
+                                      {step ? <>{fl(step.opp)} {nm(step.opp)} <span style={{ color: dm }}>{step.faceProb.toFixed(0)}%</span></> : <span style={{ color: dm }}>—</span>}
+                                    </span>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </>);
             })()}
           </div>
         )}
