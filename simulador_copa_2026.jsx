@@ -216,23 +216,63 @@ const scoreStat = (a, b, tA, tB, kind) => {
   return { a: bi, b: bj, pct: (margP[mStar] || 0) * 100, frac: false, margin: mStar };
 };
 
-// In-game probabilities: minute (0-90+), current score, red cards per side
-// Models: remaining lambda = full lambda * (90-min)/90. Red cards apply 0.78x to fouler, 1.12x to opponent (per red).
-const liveProbs = (a, b, tA, tB, minute, scoreA, scoreB, redsA, redsB) => {
+// Surpresa de um resultado já conhecido: P(placar exato) e P(desfecho 1X2) pré-jogo.
+// bits = -log2(p) — quanto maior, mais surpreendente.
+const surpriseOf = (eH, eA, tA, tB, gA, gB) => {
+  const { la, lb } = cL(eH, eA, matchTilt(tA, tB));
+  const pExact = pp(la, gA) * pp(lb, gB);
+  const pr = mProbs(eH, eA, tA, tB);
+  const pOut = (gA > gB ? pr.pH : gA < gB ? pr.pA : pr.pD) / 100;
+  return { pExact, pOut, bitsExact: -Math.log2(Math.max(pExact, 1e-12)), bitsOut: -Math.log2(Math.max(pOut, 1e-12)) };
+};
+
+// ── Modelo ao vivo ────────────────────────────────────────────────────────────
+// Intensidade de gols cresce ao longo do jogo: w(t) = a + b·t no tempo regulamentar,
+// calibrada para LIVE_F2 dos gols caírem no 2º tempo. Acréscimos jogam com a
+// intensidade do FIM do tempo correspondente (w(45) por s1 min, w(90) por s2 min).
+// remFrac(0) = 1 → o λ total da partida (incl. acréscimos) continua sendo la/lb.
+const LIVE_F2 = 0.56; // fração dos gols do tempo regulamentar que cai no 2º tempo
+const liveRemFrac = (tau, s1, s2, f2 = LIVE_F2) => {
+  const b = (f2 - 0.5) / 1012.5, a = (1 - 4050 * b) / 90; // ∫₀⁹⁰w = 1; ∫₄₅⁹⁰w = f2
+  const w45 = a + 45 * b, w90 = a + 90 * b;
+  const phi = t => a * t + b * t * t / 2; // antiderivada de w
+  const Z = 1 + s1 * w45 + s2 * w90;      // peso total da partida com acréscimos
+  const T = Math.max(0, Math.min(tau, 90 + s1 + s2));
+  let W;
+  if (T <= 45) W = phi(T);
+  else if (T <= 45 + s1) W = phi(45) + (T - 45) * w45;
+  else if (T <= 90 + s1) W = phi(T - s1) + s1 * w45;
+  else W = 1 + s1 * w45 + (T - 90 - s1) * w90;
+  return Math.max(0, (Z - W) / Z);
+};
+// Display do relógio: τ = tempo decorrido (0..90+s1+s2) → "12'", "45+2'", "67'", "90+5'"
+const fmtClock = (tau, s1) =>
+  tau <= 45 ? `${Math.round(tau)}'`
+  : tau <= 45 + s1 ? `45+${Math.round(tau - 45)}'`
+  : tau <= 90 + s1 ? `${Math.round(tau - s1)}'`
+  : `90+${Math.round(tau - 90 - s1)}'`;
+
+// In-game probabilities: τ (tempo decorrido, incl. acréscimos), placar atual, vermelhos.
+// λ restante = λ_total × remFrac(τ); vermelhos: 0.78× ao infrator, 1.12× ao adversário (por cartão).
+const liveProbs = (a, b, tA, tB, { tau = 0, gA = 0, gB = 0, redsA = 0, redsB = 0, s1 = 4, s2 = 7 }) => {
   const { la, lb } = cL(a, b, matchTilt(tA, tB));
-  const remFrac = Math.max(0, Math.min(1.05, (90 - minute) / 90)); // allow slight extra for stoppage
+  const remFrac = liveRemFrac(tau, s1, s2);
   const adjA = Math.pow(0.78, redsA) * Math.pow(1.12, redsB);
   const adjB = Math.pow(0.78, redsB) * Math.pow(1.12, redsA);
   const laR = Math.max(0.001, la * remFrac * adjA);
   const lbR = Math.max(0.001, lb * remFrac * adjB);
   let pH = 0, pD = 0, pA = 0;
+  const dist = {}; // distribuição conjunta do placar FINAL
   for (let i = 0; i <= 8; i++) for (let j = 0; j <= 8; j++) {
     const p = pp(laR, i) * pp(lbR, j);
-    const fA = scoreA + i, fB = scoreB + j;
+    const fA = gA + i, fB = gB + j;
     if (fA > fB) pH += p; else if (fA === fB) pD += p; else pA += p;
+    dist[fA + '-' + fB] = p;
   }
   const t = pH + pD + pA;
-  return { pH: pH / t * 100, pD: pD / t * 100, pA: pA / t * 100, laR, lbR, expScoreA: scoreA + laR, expScoreB: scoreB + lbR };
+  const scores = Object.entries(dist).map(([k, p]) => { const [sa, sb] = k.split('-').map(Number); return { a: sa, b: sb, p: p / t }; }).sort((x, y) => y.p - x.p);
+  const pOf = (sa, sb) => (dist[sa + '-' + sb] || 0) / t;
+  return { pH: pH / t * 100, pD: pD / t * 100, pA: pA / t * 100, laR, lbR, expScoreA: gA + laR, expScoreB: gB + lbR, scores, pOf };
 };
 
 // Resolve classificação parcial baseada em resultados preenchidos + posições forçadas
@@ -568,6 +608,7 @@ const aggregate = (pool, all, groups, conditions = []) => {
   const combos = {};
   const matchTm = {}; // matchTm[mn] = {teamPairKey: count} -- who plays each match
   const matchWho = {}; // matchWho[mn] = {team: count}
+  const matchWin = {}; // matchWin[mn] = {team: count de sims em que t VENCE essa partida}
   const matchPos = {}; // matchPos[mn] = {posKey: count} e.g. "A1×E3"
   const duelPos = {}; // duelPos[teamPairKey][rd] = {posPairKey: count} -- positions in which two teams meet at each round
   const tpc = {}; // tpc[team][posKey] = {n, ch, r32:{opp:cnt}, r16:{}, qf:{}, sf:{}, fin:{}}
@@ -652,6 +693,10 @@ const aggregate = (pool, all, groups, conditions = []) => {
           if (!matchWho[m.mn]) matchWho[m.mn] = {};
           matchWho[m.mn][m.home] = (matchWho[m.mn][m.home] || 0) + 1;
           matchWho[m.mn][m.away] = (matchWho[m.mn][m.away] || 0) + 1;
+          if (m.winner) {
+            if (!matchWin[m.mn]) matchWin[m.mn] = {};
+            matchWin[m.mn][m.winner] = (matchWin[m.mn][m.winner] || 0) + 1;
+          }
           if (m.ph && m.pa) {
             if (!matchPos[m.mn]) matchPos[m.mn] = {};
             const ppk = m.ph + '×' + m.pa;
@@ -812,7 +857,7 @@ const aggregate = (pool, all, groups, conditions = []) => {
       tmPct[t][rd] = Object.entries(tm[t][rd]).map(([o, c]) => ({ o, pct: (c / D) * 100 })).sort((a, b) => b.pct - a.pct);
     }
   });
-  return { p, g3p, muPct, comboList, tmPct, posMu, posTm, posWho, tmPos, posVsTm, matchTm, matchWho, matchPos, duelPos, tpc, matchByG3, matchChamp, gsShift, koShift, cutoff3rd, scoreDist, tieAcc, recAdv, nAccepted };
+  return { p, g3p, muPct, comboList, tmPct, posMu, posTm, posWho, tmPos, posVsTm, matchTm, matchWho, matchWin, matchPos, duelPos, tpc, matchByG3, matchChamp, gsShift, koShift, cutoff3rd, scoreDist, tieAcc, recAdv, nAccepted };
 };
 
 // Gera o pool de simulações uma única vez e agrega. Retorna também o pool para
@@ -866,11 +911,17 @@ export default function WC2026() {
   const [posVsTmData, setPosVsTmData] = useState(null);
   const [matchTmData, setMatchTmData] = useState(null);
   const [matchWhoData, setMatchWhoData] = useState(null);
+  const [matchWinData, setMatchWinData] = useState(null); // matchWin[mn] = {team: cnt vitórias}
   const [matchPosData, setMatchPosData] = useState(null);
   const [duelPosData, setDuelPosData] = useState(null);
   const [duelExpand, setDuelExpand] = useState(null); // round name when expanded
   const [liveCard, setLiveCard] = useState(null); // idx of GS card expanded for in-game calc
-  const [liveInputs, setLiveInputs] = useState({}); // { [idx]: { min, gA, gB, redsA, redsB } }
+  const [liveInputs, setLiveInputs] = useState({}); // { [idx]: { tau, gA, gB, redsA, redsB, s1, s2, csA, csB } }
+  const [bracketSel, setBracketSel] = useState(null); // {type:'match',mn} | {type:'group',gn} | null — painel de detalhe do bracket
+  const [impactData, setImpactData] = useState({}); // { resKey: {dCh, movers, nLoo} } — impacto leave-one-out
+  const [impactRun, setImpactRun] = useState(null); // resKey em cálculo, ou {done,total} na fila "todos"
+  const [surSort, setSurSort] = useState('bits'); // ordenação da aba Surpresas: 'bits' | 'impact'
+  const [surExpand, setSurExpand] = useState(null); // resKey expandida (movers) na aba Surpresas
   const [evoData, setEvoData] = useState(null); // evolution snapshots
   const [evoTeams, setEvoTeams] = useState(['Brazil','Argentina','Spain','France']);
   const [evoMetric, setEvoMetric] = useState('ch');
@@ -946,7 +997,7 @@ export default function WC2026() {
 
   // Aplica um resultado agregado (de runMC ou reaggregate) em todos os estados das abas.
   const applyAgg = (r) => {
-    setRes(r.p); setG3p(r.g3p); setMuPct(r.muPct); setComboList(r.comboList); setTmPct(r.tmPct); setPosMu(r.posMu); setPosTm(r.posTm); setPosWho(r.posWho); setTmPosData(r.tmPos); setPosVsTmData(r.posVsTm); setMatchTmData(r.matchTm); setMatchWhoData(r.matchWho); setMatchPosData(r.matchPos); setDuelPosData(r.duelPos); setTpcData(r.tpc); setMatchByG3Data(r.matchByG3); setMatchChampData(r.matchChamp); setGsShiftData(r.gsShift); setKoShiftData(r.koShift); setCutoff3rdData(r.cutoff3rd); setScoreDistData(r.scoreDist); setTieAccData(r.tieAcc); setRecAdvData(r.recAdv);
+    setRes(r.p); setG3p(r.g3p); setMuPct(r.muPct); setComboList(r.comboList); setTmPct(r.tmPct); setPosMu(r.posMu); setPosTm(r.posTm); setPosWho(r.posWho); setTmPosData(r.tmPos); setPosVsTmData(r.posVsTm); setMatchTmData(r.matchTm); setMatchWhoData(r.matchWho); setMatchWinData(r.matchWin); setMatchPosData(r.matchPos); setDuelPosData(r.duelPos); setTpcData(r.tpc); setMatchByG3Data(r.matchByG3); setMatchChampData(r.matchChamp); setGsShiftData(r.gsShift); setKoShiftData(r.koShift); setCutoff3rdData(r.cutoff3rd); setScoreDistData(r.scoreDist); setTieAccData(r.tieAcc); setRecAdvData(r.recAdv);
   };
 
   const doMC = () => {
@@ -956,6 +1007,7 @@ export default function WC2026() {
       _rSys = rSys; _customElo = customElo; _ME = customME; _useTilt = useTilt; _fav = favWeight; _spread = spread; _injM = injuries; _hb = homeAdv;
       const r = runMC(groups, N, userRes, conditions);
       poolRef.current = { pool: r.pool, all: r.all, groups }; // guarda o universo para re-filtragem instantânea
+      looCacheRef.current.clear(); setImpactData({}); // novo pool ⇒ baseline novo ⇒ impactos antigos inválidos
       applyAgg(r);
       setMcMeta({ nAccepted: r.nAccepted, n: r.n, conds: conditions });
       setRunning(false); setTab('probs');
@@ -972,6 +1024,97 @@ export default function WC2026() {
   };
 
   const doSingle = () => { _rSys = rSys; _customElo = customElo; _ME = customME; _useTilt = useTilt; _fav = favWeight; _spread = spread; _injM = injuries; _hb = homeAdv; setSingle(runSim(groups, userRes)); setTab('single'); };
+
+  // ── Impacto leave-one-out de um resultado preenchido ────────────────────────
+  // Compara o universo atual (pool do último MC, que JÁ inclui o resultado) com um
+  // MC extra SEM aquele resultado (mantendo os demais). Sempre incondicional:
+  // o pool é gerado antes do filtro condicional (condições só agem no aggregate).
+  const looCacheRef = useRef(new Map()); // resKey ('12' | 'k89') -> {dCh, movers, nLoo}
+  // Qualquer mudança de resultados/settings invalida o cache (o baseline mudou).
+  useEffect(() => { looCacheRef.current.clear(); setImpactData({}); }, [userRes, injuries, rSys, customME, useTilt, favWeight, spread, homeAdv, pc, customElo]);
+
+  // Contagem "slim" de um conjunto de sims: campeão e presença na R32 por time.
+  const slimCounts = (sims) => {
+    const ch = {}, r32 = {}; let n = 0;
+    for (const sim of sims) {
+      n++;
+      ch[sim.fin.winner] = (ch[sim.fin.winner] || 0) + 1;
+      for (const m of sim.r32) { r32[m.home] = (r32[m.home] || 0) + 1; r32[m.away] = (r32[m.away] || 0) + 1; }
+    }
+    return { ch, r32, n };
+  };
+  // Núcleo síncrono: roda o MC sem o resultado e mede o deslocamento. Caro (~nLoo sims).
+  const computeLoo = (resKey) => {
+    const cached = looCacheRef.current.get(resKey);
+    if (cached) { setImpactData(p => ({ ...p, [resKey]: cached })); return cached; }
+    _rSys = rSys; _customElo = customElo; _ME = customME; _useTilt = useTilt; _fav = favWeight; _spread = spread; _injM = injuries; _hb = homeAdv;
+    const base = slimCounts(poolRef.current.pool);
+    const urMinus = { ...userRes }; delete urMinus[resKey];
+    const nLoo = Math.min(Math.max(100, Math.floor(+nSim) || 10000), 5000);
+    const loo = { ch: {}, r32: {}, n: nLoo };
+    for (let i = 0; i < nLoo; i++) {
+      const sim = runSim(groups, urMinus);
+      loo.ch[sim.fin.winner] = (loo.ch[sim.fin.winner] || 0) + 1;
+      for (const m of sim.r32) { loo.r32[m.home] = (loo.r32[m.home] || 0) + 1; loo.r32[m.away] = (loo.r32[m.away] || 0) + 1; }
+    }
+    // Δ por time em pontos percentuais: positivo = o resultado AUMENTOU a chance do time.
+    const movers = all.map(t => ({
+      t,
+      dCh: ((base.ch[t] || 0) / base.n - (loo.ch[t] || 0) / loo.n) * 100,
+      dR32: ((base.r32[t] || 0) / base.n - (loo.r32[t] || 0) / loo.n) * 100,
+    })).sort((x, y) => Math.abs(y.dCh) - Math.abs(x.dCh) || Math.abs(y.dR32) - Math.abs(x.dR32));
+    const dCh = movers.reduce((s, m) => s + Math.abs(m.dCh), 0) / 2; // distância de variação total (p.p.)
+    const out = { dCh, movers: movers.slice(0, 5).filter(m => Math.abs(m.dCh) > 0.01 || Math.abs(m.dR32) > 0.01), nLoo };
+    looCacheRef.current.set(resKey, out);
+    setImpactData(p => ({ ...p, [resKey]: out }));
+    return out;
+  };
+  const looImpact = (resKey) => {
+    if (looCacheRef.current.has(resKey)) { computeLoo(resKey); return; }
+    if (!poolRef.current?.pool || impactRun) return;
+    setImpactRun(resKey);
+    setTimeout(() => { computeLoo(resKey); setImpactRun(null); }, 30);
+  };
+  // Fila serial "calcular todos": um resultado por tick para a UI respirar.
+  const looAll = (keys) => {
+    if (!poolRef.current?.pool || impactRun) return;
+    const todo = keys.filter(k => !looCacheRef.current.has(k));
+    if (!todo.length) return;
+    const total = todo.length;
+    const step = (i) => {
+      if (i >= todo.length) { setImpactRun(null); return; }
+      setImpactRun({ done: i, total });
+      setTimeout(() => { computeLoo(todo[i]); step(i + 1); }, 40);
+    };
+    step(0);
+  };
+
+  // Cenário modal/mediano de um grupo: cada um dos 6 jogos termina no placar
+  // moda/mediana (resultados preenchidos e lesões respeitados); a tabela deriva
+  // desses 6 placares — Pts/SG/GM/V-E-D consistentes entre si e entre os times.
+  const groupScenario = (gn, kind) => {
+    const tb = {};
+    groups[gn].forEach(t => { tb[t] = { pts: 0, gd: 0, gf: 0, w: 0, d: 0, l: 0 }; });
+    GS.forEach(([g, hi, ai, date, city], idx) => {
+      if (g !== gn) return;
+      const h = groups[gn][hi], a = groups[gn][ai];
+      const fx = userRes[idx];
+      let gA, gB;
+      if (fx?.gA != null && fx?.gB != null) { gA = fx.gA; gB = fx.gB; }
+      else {
+        const _im = injuries[idx] || {};
+        const sc = scoreStat(efCity(h, city) - (_im.h || 0) * INJ_ELO, efCity(a, city) - (_im.a || 0) * INJ_ELO, h, a, kind);
+        gA = sc.a; gB = sc.b;
+      }
+      tb[h].gf += gA; tb[h].gd += gA - gB;
+      tb[a].gf += gB; tb[a].gd += gB - gA;
+      if (gA > gB) { tb[h].pts += 3; tb[h].w++; tb[a].l++; }
+      else if (gA < gB) { tb[a].pts += 3; tb[a].w++; tb[h].l++; }
+      else { tb[h].pts++; tb[a].pts++; tb[h].d++; tb[a].d++; }
+    });
+    const sorted = groups[gn].slice().sort((x, y) => tb[y].pts - tb[x].pts || tb[y].gd - tb[x].gd || tb[y].gf - tb[x].gf);
+    return { tb, sorted };
+  };
 
   // Evolution: snapshot probabilities at each game with a real result.
   // If evoFilterTeam set, only creates a snapshot when the played game involves that team.
@@ -1492,9 +1635,9 @@ export default function WC2026() {
 
               const finH = sf[0].winner, finA = sf[1].winner;
 
-              // Match box component
+              // Match box component (clicável → painel de detalhe abaixo do bracket)
               const MB = ({ mn, hTeam, aTeam, hPos, aPos, winner, city, label }) => (
-                <div style={{ background: '#0d111d', borderRadius: '3px', border: `1px solid ${bd}`, minWidth: '130px', maxWidth: '165px' }}>
+                <div onClick={() => setBracketSel(s => s?.type === 'match' && s.mn === mn ? null : { type: 'match', mn })} title="Clique para ver quem pode jogar esta partida" style={{ background: '#0d111d', borderRadius: '3px', border: `1px solid ${bracketSel?.type === 'match' && bracketSel.mn === mn ? acc : bd}`, minWidth: '130px', maxWidth: '165px', cursor: 'pointer' }}>
                   <div style={{ fontSize: '7px', color: dm, padding: '0 4px', borderBottom: `1px solid ${bd}33`, display: 'flex', justifyContent: 'space-between' }}>
                     <span>{label} {DOW(KO_DATE[mn])} {KO_DATE[mn]} {KO_BRT[mn]} {city}</span>
                     <span style={{ color: bl, fontFamily: 'monospace', fontWeight: 600 }}>{hPos}x{aPos}</span>
@@ -1522,7 +1665,7 @@ export default function WC2026() {
                 const g3adv = g3p?.[gn] || 0;
                 const isTop8 = top8set.has(gn);
                 return (
-                  <div style={{ background: card, borderRadius:'4px', border:`1px solid ${bd}`, minWidth:'115px', maxWidth:'145px' }}>
+                  <div onClick={() => setBracketSel(s => s?.type === 'group' && s.gn === gn ? null : { type: 'group', gn })} title="Clique para ver a distribuição completa por posição" style={{ background: card, borderRadius:'4px', border:`1px solid ${bracketSel?.type === 'group' && bracketSel.gn === gn ? acc : bd}`, minWidth:'115px', maxWidth:'145px', cursor:'pointer' }}>
                     <div style={{ fontSize:'8px', fontWeight:700, color:acc, padding:'2px 4px', borderBottom:`1px solid ${bd}33`, display:'flex', justifyContent:'space-between' }}>
                       <span>Grupo {gn}</span>
                       <span style={{ fontSize:'7px', color: isTop8 ? '#22c55e' : '#ef4444' }}>3{"°↑"}{g3adv.toFixed(0)}%</span>
@@ -1634,6 +1777,94 @@ export default function WC2026() {
                       })}
                     </div>
                   </div>}
+
+                  {/* Painel de detalhe — clique em partida (MB) ou grupo (GCard) */}
+                  {bracketSel && (() => {
+                    const closeBtn = <button onClick={() => setBracketSel(null)} style={{ background: 'transparent', border: 'none', color: rd, cursor: 'pointer', fontSize: '14px', lineHeight: 1, padding: 0 }}>✕</button>;
+                    if (bracketSel.type === 'match') {
+                      const mn = bracketSel.mn;
+                      const who = Object.entries(matchWhoData?.[mn] || {}).sort((a, b) => b[1] - a[1]);
+                      const othersPct = who.slice(12).reduce((s, [, c]) => s + c / mcN * 100, 0);
+                      const nextK = mn <= 88 ? 'r16' : mn <= 96 ? 'qf' : mn <= 100 ? 'sf' : mn <= 102 ? 'fin' : mn === 103 ? 'p3' : 'ch';
+                      const nextL = { r16: 'R16%', qf: 'QF%', sf: 'SF%', fin: 'Final%', p3: '🥉%', ch: '🏆%' }[nextK];
+                      const pairs = Object.entries(matchTmData?.[mn] || {}).sort((a, b) => b[1] - a[1]).slice(0, 8);
+                      const poss = Object.entries(matchPosData?.[mn] || {}).sort((a, b) => b[1] - a[1]).slice(0, 8);
+                      return (
+                        <div style={{ marginBottom: '12px', padding: '8px 10px', background: card, borderRadius: '6px', border: `1px solid ${acc}55`, maxWidth: '720px' }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                            <span style={{ fontSize: '11px', fontWeight: 700, color: acc }}>M{mn} • {KO_SPEC[mn]?.l} • {DOW(KO_DATE[mn])} {KO_DATE[mn]} {KO_BRT[mn]} • {KO_CITY[mn]}</span>
+                            {closeBtn}
+                          </div>
+                          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', alignItems: 'start' }}>
+                            <div>
+                              <div style={{ display: 'grid', gridTemplateColumns: '1fr 80px 46px 46px 46px', gap: '4px', fontSize: '8px', color: dm, fontWeight: 600, padding: '0 0 2px', borderBottom: `1px solid ${bd}` }}>
+                                <span>Quem joga esta partida</span><span /><span style={{ textAlign: 'right' }}>joga%</span><span style={{ textAlign: 'right' }} title="P(vence | joga esta partida)">vence%*</span><span style={{ textAlign: 'right' }} title="Probabilidade incondicional (todas as sims)">{nextL}</span>
+                              </div>
+                              {who.slice(0, 12).map(([t, c]) => {
+                                const pPlay = c / mcN * 100;
+                                const pWin = matchWinData?.[mn]?.[t] ? matchWinData[mn][t] / c * 100 : 0;
+                                return (
+                                  <div key={t} style={{ display: 'grid', gridTemplateColumns: '1fr 80px 46px 46px 46px', gap: '4px', alignItems: 'center', fontSize: '10px', padding: '1px 0' }}>
+                                    <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{fl(t)} {nm(t)}</span>
+                                    <div style={{ height: '8px', background: `${acc}18`, borderRadius: '2px' }}><div style={{ height: '100%', width: `${Math.min(pPlay, 100)}%`, background: acc, borderRadius: '2px' }} /></div>
+                                    <span style={{ textAlign: 'right', fontWeight: 700, color: acc }}>{pPlay.toFixed(1)}%</span>
+                                    <span style={{ textAlign: 'right', color: gn }}>{pWin.toFixed(0)}%</span>
+                                    <span style={{ textAlign: 'right', color: dm }}>{(res[t]?.[nextK] || 0).toFixed(1)}%</span>
+                                  </div>
+                                );
+                              })}
+                              {othersPct > 0.05 && <div style={{ fontSize: '9px', color: dm, paddingTop: '2px' }}>+ outros: {othersPct.toFixed(1)}%</div>}
+                              <div style={{ fontSize: '8px', color: dm, marginTop: '4px', fontStyle: 'italic' }}>* vence% = P(vencer | estar nesta partida); {nextL} = prob. incondicional.</div>
+                            </div>
+                            <div>
+                              <div style={{ fontSize: '9px', fontWeight: 700, color: bl, marginBottom: '2px' }}>Confrontos mais prováveis</div>
+                              {pairs.map(([k, c]) => { const [a2, b2] = k.split('|'); return (
+                                <div key={k} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '10px', padding: '1px 0' }}>
+                                  <span>{fl(a2)} {nm(a2)} <span style={{ color: dm }}>vs</span> {fl(b2)} {nm(b2)}</span>
+                                  <span style={{ fontWeight: 700, color: bl }}>{(c / mcN * 100).toFixed(1)}%</span>
+                                </div>
+                              ); })}
+                              {poss.length > 0 && <>
+                                <div style={{ fontSize: '9px', fontWeight: 700, color: bl, margin: '6px 0 2px' }}>Posições nesta partida</div>
+                                <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
+                                  {poss.map(([k, c]) => <span key={k} style={{ padding: '1px 6px', fontSize: '9px', borderRadius: '3px', background: `${bl}18`, color: bl, border: `1px solid ${bl}33`, fontFamily: 'monospace' }}>{k} {(c / mcN * 100).toFixed(0)}%</span>)}
+                                </div>
+                              </>}
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    }
+                    // type === 'group'
+                    const gName = bracketSel.gn;
+                    return (
+                      <div style={{ marginBottom: '12px', padding: '8px 10px', background: card, borderRadius: '6px', border: `1px solid ${acc}55`, maxWidth: '720px' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                          <span style={{ fontSize: '11px', fontWeight: 700, color: acc }}>Grupo {gName} — quem termina em cada posição <span style={{ color: bl, fontWeight: 600 }}>• 3° avança: {(g3p?.[gName] || 0).toFixed(0)}%</span></span>
+                          {closeBtn}
+                        </div>
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(150px,1fr))', gap: '8px' }}>
+                          {[1, 2, 3, 4].map(p => {
+                            const entries = Object.entries(posWho?.[gName + p] || {}).sort((a, b) => b[1] - a[1]);
+                            return (
+                              <div key={p}>
+                                <div style={{ fontSize: '9px', fontWeight: 700, color: p <= 2 ? gn : p === 3 ? bl : rd, borderBottom: `1px solid ${bd}`, paddingBottom: '2px', marginBottom: '2px' }}>{gName}{p} {p <= 2 ? '(avança)' : p === 3 ? '(repescagem 3°s)' : '(eliminado)'}</div>
+                                {entries.map(([t, c]) => {
+                                  const pct = c / mcN * 100;
+                                  return (
+                                    <div key={t} style={{ display: 'grid', gridTemplateColumns: '1fr 40px', gap: '4px', alignItems: 'center', fontSize: '10px', padding: '1px 0' }}>
+                                      <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: pct > 50 ? tx : dm }}>{fl(t)} {nm(t)}</span>
+                                      <span style={{ textAlign: 'right', fontWeight: 600, color: pct > 50 ? gn : pct > 20 ? acc : dm }}>{pct.toFixed(1)}%</span>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    );
+                  })()}
                 </div>
               );
             })()}
@@ -1651,13 +1882,13 @@ export default function WC2026() {
               <button onClick={() => setGrpWDL(v => !v)} style={{ padding: '4px 9px', fontSize: '10px', fontWeight: 700, background: grpWDL ? `${acc}33` : card, color: grpWDL ? acc : dm, border: `1px solid ${grpWDL ? acc : bd}`, borderRadius: '5px', cursor: 'pointer' }}>
                 {grpWDL ? '✓ V/E/D' : '+ V/E/D'}
               </button>
-              <span style={{ fontSize: '9px', color: dm }}>Pts, SG, GM{grpWDL ? ', V/E/D' : ''} mostram a {grpStat === 'median' ? 'mediana' : grpStat === 'mode' ? 'moda' : 'média'} por simulação.</span>
+              <span style={{ fontSize: '9px', color: dm }}>{grpStat === 'mean' ? <>Pts, SG, GM{grpWDL ? ', V/E/D' : ''} mostram a média por simulação.</> : <>Cenário <strong style={{ color: acc }}>{grpStat === 'median' ? 'mediano' : 'modal'}</strong>: cada jogo termina no placar {grpStat === 'median' ? 'mediana' : 'moda'} (resultados preenchidos e lesões respeitados) — Pts, SG, GM{grpWDL ? ', V/E/D' : ''} e a ordem derivam desses 6 placares e são consistentes entre si. As colunas de % continuam vindas do Monte Carlo.</>}</span>
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(310px,1fr))', gap: '8px' }}>
               {Object.entries(groups).map(([gn, ts]) => {
-                const sorted = ts.slice().sort((a, b) => (res[b]?.g1 || 0) - (res[a]?.g1 || 0));
                 const stat = grpStat; // 'mean' | 'median' | 'mode'
-                const pick = (avg, med, mod) => stat === 'mean' ? avg : stat === 'median' ? med : mod;
+                const sc = stat !== 'mean' ? groupScenario(gn, stat) : null; // cenário coerente (placar moda/mediana por jogo)
+                const sorted = sc ? sc.sorted : ts.slice().sort((a, b) => (res[b]?.g1 || 0) - (res[a]?.g1 || 0));
                 const fmtN = v => stat === 'mean' ? v.toFixed(2) : Math.round(v).toString();
                 const cols = ['Seleção', 'Pts', 'SG', 'GM', ...(grpWDL ? ['V', 'E', 'D'] : []), '1°', '2°', '3°✓', '3°✗', '4°', 'Avança'];
                 return (
@@ -1672,17 +1903,18 @@ export default function WC2026() {
                       ))}</tr></thead>
                       <tbody>{sorted.map(t => {
                         const r = res[t] || {};
+                        const stb = sc ? sc.tb[t] : null;
                         const adv = (r.g1 || 0) + (r.g2 || 0) + (r.g3a || 0);
-                        const pts = pick(r.avgPts || 0, r.medPts || 0, r.modPts || 0);
-                        const sg = pick(r.avgGd || 0, r.medGd || 0, r.modGd || 0);
-                        const gm = pick(r.avgGf || 0, r.medGf || 0, r.modGf || 0);
+                        const pts = stb ? stb.pts : (r.avgPts || 0);
+                        const sg = stb ? stb.gd : (r.avgGd || 0);
+                        const gm = stb ? stb.gf : (r.avgGf || 0);
                         return (
                           <tr key={t}>
                             <td style={{ padding: '3px 5px', fontWeight: 500 }}>{fl(t)} {nm(t)}</td>
                             <td style={{ padding: '3px 5px', textAlign: 'right', fontWeight: 600, color: tx }}>{fmtN(pts)}</td>
                             <td style={{ padding: '3px 5px', textAlign: 'right', color: sg > 0 ? '#22c55e' : sg < 0 ? '#ef4444' : dm }}>{sg > 0 ? '+' : ''}{fmtN(sg)}</td>
                             <td style={{ padding: '3px 5px', textAlign: 'right', color: tx }}>{fmtN(gm)}</td>
-                            {grpWDL && [pick(r.avgW || 0, r.medW || 0, r.modW || 0), pick(r.avgD || 0, r.medD || 0, r.modD || 0), pick(r.avgL || 0, r.medL || 0, r.modL || 0)].map((v, i) => (
+                            {grpWDL && [stb ? stb.w : (r.avgW || 0), stb ? stb.d : (r.avgD || 0), stb ? stb.l : (r.avgL || 0)].map((v, i) => (
                               <td key={i} style={{ padding: '3px 5px', textAlign: 'right', color: i === 0 ? '#22c55e' : i === 1 ? dm : '#ef4444' }}>{fmtN(v)}</td>
                             ))}
                             {['g1', 'g2', 'g3a', 'g3o', 'g4'].map(k => (
@@ -1717,7 +1949,91 @@ export default function WC2026() {
               <SB active={muView === 'tie'} onClick={() => setMuView('tie')}>Desempate</SB>
               <SB active={muView === 'confronto'} onClick={() => setMuView('confronto')}>Confronto</SB>
               <SB active={muView === 'path'} onClick={() => setMuView('path')}>Path</SB>
+              <SB active={muView === 'surpresas'} onClick={() => setMuView('surpresas')}>Surpresas</SB>
             </div>
+
+            {muView === 'surpresas' && (() => {
+              // Coleta todos os resultados preenchidos (GS + KO) com surpresa analítica pré-jogo.
+              const rows = [];
+              GS.forEach(([g, hi, ai, date, city], idx) => {
+                const fx = userRes[idx];
+                if (fx?.gA == null || fx?.gB == null) return;
+                const h = groups[g][hi], a = groups[g][ai];
+                const _im = injuries[idx] || {};
+                const s = surpriseOf(efCity(h, city) - (_im.h || 0) * INJ_ELO, efCity(a, city) - (_im.a || 0) * INJ_ELO, h, a, fx.gA, fx.gB);
+                rows.push({ key: String(idx), label: 'J' + (idx + 1), fase: 'Grupo ' + g, h, a, gA: fx.gA, gB: fx.gB, tie: false, ...s });
+              });
+              const stgS = resolveStandings(groups, userRes);
+              const koS = resolveKO(stgS, userRes);
+              for (let mn = 73; mn <= 104; mn++) {
+                const fx = userRes['k' + mn];
+                if (fx?.gA == null || fx?.gB == null) continue;
+                const m = koS[mn];
+                if (!m?.h || !m?.a) continue;
+                const s = surpriseOf(efCity(m.h, KO_CITY[mn]), efCity(m.a, KO_CITY[mn]), m.h, m.a, fx.gA, fx.gB);
+                rows.push({ key: 'k' + mn, label: 'M' + mn, fase: m.l, h: m.h, a: m.a, gA: fx.gA, gB: fx.gB, tie: fx.gA === fx.gB, pw: fx.pw, ...s });
+              }
+              const sorted = [...rows].sort((x, y) => surSort === 'impact'
+                ? ((impactData[y.key]?.dCh ?? -1) - (impactData[x.key]?.dCh ?? -1)) || (y.bitsExact - x.bitsExact)
+                : y.bitsExact - x.bitsExact);
+              const pending = rows.filter(r => !impactData[r.key]).length;
+              const runningAll = impactRun && typeof impactRun === 'object';
+              const canImpact = !!poolRef.current?.pool;
+              return (
+                <div>
+                  <div style={{ fontSize: '12px', fontWeight: 700, color: acc, marginBottom: '4px' }}>📰 Resultados inseridos — surpresa & impacto no torneio</div>
+                  <div style={{ fontSize: '10px', color: dm, marginBottom: '8px', lineHeight: 1.5, maxWidth: '760px' }}><strong style={{ color: tx }}>Surpresa</strong> = quão improvável era o placar exato antes do jogo, em bits (−log₂ P; cada +1 bit = metade da chance). <strong style={{ color: tx }}>Impacto</strong> = quanto o resultado moveu as chances de título: distância entre o universo atual e um Monte Carlo extra <em>sem</em> esse resultado (leave-one-out, mantendo os demais; sempre incondicional, ignora filtros).</div>
+                  {rows.length === 0 ? <div style={{ padding: '30px', textAlign: 'center', color: dm, fontSize: '11px' }}>Nenhum resultado preenchido — preencha na aba 📝 Resultados.</div> : <>
+                    <div style={{ display: 'flex', gap: '6px', alignItems: 'center', marginBottom: '8px', flexWrap: 'wrap' }}>
+                      <SB active={surSort === 'bits'} onClick={() => setSurSort('bits')}>↓ Surpresa</SB>
+                      <SB active={surSort === 'impact'} onClick={() => setSurSort('impact')}>↓ Impacto</SB>
+                      <button onClick={() => looAll(rows.map(r => r.key))} disabled={!!impactRun || pending === 0 || !canImpact} style={{ padding: '4px 10px', fontSize: '10px', fontWeight: 700, color: pending === 0 ? gn : '#000', background: pending === 0 ? 'transparent' : acc, border: pending === 0 ? `1px solid ${gn}44` : 'none', borderRadius: '4px', cursor: impactRun || pending === 0 ? 'default' : 'pointer', opacity: impactRun ? 0.6 : 1 }}>
+                        {runningAll ? `⏳ Calculando… ${impactRun.done + 1}/${impactRun.total}` : pending === 0 ? '✓ Impactos calculados' : `Calcular impactos (${pending})`}
+                      </button>
+                      <span style={{ fontSize: '9px', color: dm }}>{rows.length} resultado(s)</span>
+                    </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: '34px 1fr 56px 56px 58px 92px 22px', gap: '4px', fontSize: '8px', color: dm, fontWeight: 600, padding: '0 8px 3px', maxWidth: '860px' }}>
+                      <span>#</span><span>Jogo</span><span style={{ textAlign: 'right' }} title="Prob. pré-jogo do desfecho 1X2 ocorrido (90')">P(1X2)</span><span style={{ textAlign: 'right' }} title="Prob. pré-jogo do placar exato (90')">P(placar)</span><span style={{ textAlign: 'right' }}>Surpresa</span><span style={{ textAlign: 'right' }} title="Δ nas probabilidades de título (distância de variação total, pontos percentuais)">Impacto 🏆</span><span />
+                    </div>
+                    <div style={{ maxWidth: '860px' }}>
+                      {sorted.map((r, i) => {
+                        const im = impactData[r.key];
+                        const isExp = surExpand === r.key;
+                        const calcing = impactRun === r.key || (runningAll && !im);
+                        return (
+                          <div key={r.key} style={{ background: i % 2 === 0 ? card : '#0d111d', borderRadius: '4px', marginBottom: '2px', padding: '4px 8px' }}>
+                            <div style={{ display: 'grid', gridTemplateColumns: '34px 1fr 56px 56px 58px 92px 22px', gap: '4px', alignItems: 'center', fontSize: '10px' }}>
+                              <span style={{ color: dm, fontSize: '9px' }}>{r.label}</span>
+                              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}><span style={{ color: bl, fontSize: '8px', marginRight: '4px' }}>{r.fase}</span>{fl(r.h)} {nm(r.h)} <strong>{r.gA}×{r.gB}</strong> {fl(r.a)} {nm(r.a)}{r.tie && r.pw ? <span style={{ color: dm, fontSize: '8px' }}> (pên: {r.pw === 'B' ? nm(r.a) : nm(r.h)})</span> : ''}</span>
+                              <span style={{ textAlign: 'right', color: dm }}>{(r.pOut * 100).toFixed(0)}%</span>
+                              <span style={{ textAlign: 'right', color: dm }}>{(r.pExact * 100).toFixed(1)}%</span>
+                              <span style={{ textAlign: 'right', fontWeight: 700, color: r.bitsExact > 6 ? rd : r.bitsExact > 4.5 ? '#f97316' : acc }}>{r.bitsExact.toFixed(1)} bits</span>
+                              {im ? <span style={{ textAlign: 'right', fontWeight: 700, color: im.dCh > 3 ? rd : im.dCh > 1 ? '#f97316' : dm }}>Δ {im.dCh.toFixed(1)} p.p.</span>
+                                : calcing ? <span style={{ textAlign: 'right', color: dm }}>⏳…</span>
+                                : <button onClick={() => looImpact(r.key)} disabled={!!impactRun || !canImpact} style={{ padding: '1px 4px', fontSize: '9px', background: 'transparent', color: canImpact ? bl : dm, border: `1px solid ${bd}`, borderRadius: '3px', cursor: canImpact && !impactRun ? 'pointer' : 'default' }}>calcular</button>}
+                              <button onClick={() => setSurExpand(isExp ? null : r.key)} disabled={!im} style={{ background: 'transparent', border: 'none', color: im ? acc : `${dm}55`, cursor: im ? 'pointer' : 'default', fontSize: '10px', padding: 0 }}>{isExp ? '▲' : '▼'}</button>
+                            </div>
+                            {isExp && im && (
+                              <div style={{ marginTop: '4px', padding: '5px 8px', background: '#0a0e18', borderRadius: '4px', border: `1px solid ${bd}` }}>
+                                <div style={{ fontSize: '8px', color: dm, fontWeight: 600, marginBottom: '3px' }}>Maiores deslocamentos de probabilidade causados por este resultado (vs. universo sem ele; {im.nLoo.toLocaleString()} sims, ruído ±~{(100 / Math.sqrt(im.nLoo)).toFixed(1)} p.p.)</div>
+                                {im.movers.length === 0 ? <div style={{ fontSize: '9px', color: dm }}>≈ nenhum deslocamento acima do ruído.</div> : im.movers.map(mv => (
+                                  <div key={mv.t} style={{ display: 'grid', gridTemplateColumns: '1fr 90px 90px', gap: '4px', fontSize: '10px', padding: '1px 0' }}>
+                                    <span>{fl(mv.t)} {nm(mv.t)}</span>
+                                    <span style={{ textAlign: 'right', fontWeight: 600, color: mv.dCh > 0 ? gn : mv.dCh < 0 ? rd : dm }}>🏆 {mv.dCh > 0 ? '+' : ''}{mv.dCh.toFixed(1)} p.p.</span>
+                                    <span style={{ textAlign: 'right', color: mv.dR32 > 0 ? gn : mv.dR32 < 0 ? rd : dm }}>R32 {mv.dR32 > 0 ? '+' : ''}{mv.dR32.toFixed(1)} p.p.</span>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                    <div style={{ fontSize: '8px', color: dm, marginTop: '6px', lineHeight: 1.5, maxWidth: '760px' }}>Surpresa e P(·) referem-se aos 90 minutos (no mata-mata, pênaltis não entram na conta). Impactos menores que ~1 p.p. são indistinguíveis do ruído do Monte Carlo. Mudar resultados ou configurações invalida os impactos calculados.</div>
+                  </>}
+                </div>
+              );
+            })()}
 
             {muView === 'round' && (<>
               <div style={{ display: 'flex', gap: '3px', marginBottom: '10px', flexWrap: 'wrap' }}>
@@ -3207,6 +3523,19 @@ export default function WC2026() {
                                 <button onClick={() => setKO(m.mn, 'pw', 'B')} style={{ padding: '2px 6px', fontSize: '10px', fontWeight: 600, background: fx.pw === 'B' ? `${gn}33` : 'transparent', color: fx.pw === 'B' ? gn : dm, border: `1px solid ${fx.pw === 'B' ? gn : bd}`, borderRadius: '3px', cursor: 'pointer' }}>{fl(m.a)} {nm(m.a)}</button>
                               </div>
                             )}
+                            {hasFx && ready && (() => {
+                              const s = surpriseOf(efCity(m.h, KO_CITY[m.mn]), efCity(m.a, KO_CITY[m.mn]), m.h, m.a, fx.gA, fx.gB);
+                              const sKey = 'k' + m.mn;
+                              const im = impactData[sKey];
+                              return (
+                                <div style={{ marginTop: '3px', display: 'flex', gap: '10px', alignItems: 'center', justifyContent: 'center', fontSize: '9px', flexWrap: 'wrap' }}>
+                                  <span style={{ color: s.bitsExact > 6 ? rd : s.bitsExact > 4.5 ? '#f97316' : dm }} title="-log₂ da prob. pré-jogo do placar exato nos 90 minutos (pênaltis não entram)">🎯 surpresa {s.bitsExact.toFixed(1)} bits{tie ? " (90')" : ''} <span style={{ color: dm }}>(placar tinha {(s.pExact * 100).toFixed(1)}%, 1X2 tinha {(s.pOut * 100).toFixed(0)}%)</span></span>
+                                  {im ? <span style={{ color: im.dCh > 3 ? rd : im.dCh > 1 ? '#f97316' : dm }} title="Δ nas probabilidades de título vs. universo sem este resultado (leave-one-out)">⚡ Δtítulo {im.dCh.toFixed(1)} p.p.{im.movers[0] ? ` • ${nm(im.movers[0].t)} ${im.movers[0].dCh > 0 ? '+' : ''}${im.movers[0].dCh.toFixed(1)}` : ''}</span>
+                                    : impactRun === sKey ? <span style={{ color: dm }}>⏳ calculando impacto…</span>
+                                    : <button onClick={() => looImpact(sKey)} disabled={!!impactRun || !poolRef.current?.pool} style={{ padding: '1px 6px', fontSize: '8px', background: 'transparent', color: poolRef.current?.pool ? bl : dm, border: `1px solid ${bd}`, borderRadius: '3px', cursor: poolRef.current?.pool && !impactRun ? 'pointer' : 'default' }} title="Mede quanto este resultado moveu as chances de título (roda um MC extra sem ele)">⚡ impacto</button>}
+                                </div>
+                              );
+                            })()}
                           </div>
                         );
                       })}
@@ -3237,9 +3566,12 @@ export default function WC2026() {
                     const fx = userRes[m.idx];
                     const hasFx = fx?.gA != null && fx?.gB != null;
                     const isLive = liveCard === m.idx;
-                    const li = liveInputs[m.idx] || { min: 0, gA: 0, gB: 0, redsA: 0, redsB: 0 };
-                    const liveP = isLive ? liveProbs(_eH, _eA, m.home, m.away, +li.min || 0, +li.gA || 0, +li.gB || 0, +li.redsA || 0, +li.redsB || 0) : null;
-                    const setLI = (field, val) => setLiveInputs(p => ({ ...p, [m.idx]: { ...(p[m.idx] || { min: 0, gA: 0, gB: 0, redsA: 0, redsB: 0 }), [field]: val } }));
+                    const LI_DEF = { tau: 0, gA: 0, gB: 0, redsA: 0, redsB: 0, s1: 4, s2: 7, csA: '', csB: '' };
+                    const li = { ...LI_DEF, ...(liveInputs[m.idx] || {}) };
+                    const liS1 = Math.max(0, Math.min(15, +li.s1 || 0)), liS2 = Math.max(0, Math.min(15, +li.s2 || 0));
+                    const liTau = Math.max(0, Math.min(90 + liS1 + liS2, +li.tau || 0)); // clamp: reduzir acréscimos depois de mover o slider não pode estourar
+                    const liveP = isLive ? liveProbs(_eH, _eA, m.home, m.away, { tau: liTau, gA: +li.gA || 0, gB: +li.gB || 0, redsA: +li.redsA || 0, redsB: +li.redsB || 0, s1: liS1, s2: liS2 }) : null;
+                    const setLI = (field, val) => setLiveInputs(p => ({ ...p, [m.idx]: { ...LI_DEF, ...(p[m.idx] || {}), [field]: val } }));
                     return (
                       <div key={m.idx} style={{ background: card, borderRadius: '5px', padding: '6px 10px', marginBottom: '3px', border: `1px solid ${isLive ? acc : hasFx ? gn + '44' : bd}` }}>
                         <div onClick={() => setLiveCard(isLive ? null : m.idx)} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '3px', cursor: 'pointer', userSelect: 'none' }}>
@@ -3266,16 +3598,38 @@ export default function WC2026() {
                           </div>
                           <div style={{ fontSize: '12px', fontWeight: 500 }}>{fl(m.away)} {nm(m.away)}</div>
                         </div>
+                        {hasFx && (() => {
+                          const s = surpriseOf(_eH, _eA, m.home, m.away, fx.gA, fx.gB);
+                          const sKey = String(m.idx);
+                          const im = impactData[sKey];
+                          return (
+                            <div style={{ marginTop: '3px', display: 'flex', gap: '10px', alignItems: 'center', justifyContent: 'center', fontSize: '9px', flexWrap: 'wrap' }}>
+                              <span style={{ color: s.bitsExact > 6 ? rd : s.bitsExact > 4.5 ? '#f97316' : dm }} title="-log₂ da prob. pré-jogo do placar exato">🎯 surpresa {s.bitsExact.toFixed(1)} bits <span style={{ color: dm }}>(placar tinha {(s.pExact * 100).toFixed(1)}%, 1X2 tinha {(s.pOut * 100).toFixed(0)}%)</span></span>
+                              {im ? <span style={{ color: im.dCh > 3 ? rd : im.dCh > 1 ? '#f97316' : dm }} title="Δ nas probabilidades de título vs. universo sem este resultado (leave-one-out)">⚡ Δtítulo {im.dCh.toFixed(1)} p.p.{im.movers[0] ? ` • ${nm(im.movers[0].t)} ${im.movers[0].dCh > 0 ? '+' : ''}${im.movers[0].dCh.toFixed(1)}` : ''}</span>
+                                : impactRun === sKey ? <span style={{ color: dm }}>⏳ calculando impacto…</span>
+                                : <button onClick={() => looImpact(sKey)} disabled={!!impactRun || !poolRef.current?.pool} style={{ padding: '1px 6px', fontSize: '8px', background: 'transparent', color: poolRef.current?.pool ? bl : dm, border: `1px solid ${bd}`, borderRadius: '3px', cursor: poolRef.current?.pool && !impactRun ? 'pointer' : 'default' }} title="Mede quanto este resultado moveu as chances de título (roda um MC extra sem ele)">⚡ impacto</button>}
+                            </div>
+                          );
+                        })()}
                         {isLive && (
                           <div style={{ marginTop: '8px', padding: '8px 10px', background: '#0d111d', borderRadius: '4px', border: `1px solid ${acc}33` }}>
                             <div style={{ fontSize: '10px', fontWeight: 700, color: acc, marginBottom: '6px' }}>⏱️ Probabilidade ao vivo</div>
-                            <div style={{ display: 'grid', gridTemplateColumns: 'auto 1fr auto auto auto auto', gap: '6px', alignItems: 'center', fontSize: '10px', marginBottom: '6px' }}>
+                            <div style={{ display: 'grid', gridTemplateColumns: 'auto 1fr auto auto auto auto auto', gap: '6px', alignItems: 'center', fontSize: '10px', marginBottom: '4px' }}>
                               <span style={{ color: dm }}>Min:</span>
-                              <input type="range" min="0" max="95" value={li.min} onChange={e => setLI('min', +e.target.value)} style={{ width: '100%' }} />
-                              <span style={{ fontWeight: 700, color: acc, minWidth: '32px' }}>{li.min}'</span>
-                              <button onClick={() => setLI('min', 0)} style={{ padding: '1px 6px', fontSize: '9px', background: 'transparent', color: dm, border: `1px solid ${bd}`, borderRadius: '3px', cursor: 'pointer' }}>0'</button>
-                              <button onClick={() => setLI('min', 45)} style={{ padding: '1px 6px', fontSize: '9px', background: 'transparent', color: dm, border: `1px solid ${bd}`, borderRadius: '3px', cursor: 'pointer' }}>HT</button>
-                              <button onClick={() => setLI('min', 90)} style={{ padding: '1px 6px', fontSize: '9px', background: 'transparent', color: dm, border: `1px solid ${bd}`, borderRadius: '3px', cursor: 'pointer' }}>FT</button>
+                              <input type="range" min="0" max={90 + liS1 + liS2} value={liTau} onChange={e => setLI('tau', +e.target.value)} style={{ width: '100%' }} />
+                              <span style={{ fontWeight: 700, color: acc, minWidth: '40px', textAlign: 'right' }}>{fmtClock(liTau, liS1)}</span>
+                              <button onClick={() => setLI('tau', 0)} style={{ padding: '1px 6px', fontSize: '9px', background: 'transparent', color: dm, border: `1px solid ${bd}`, borderRadius: '3px', cursor: 'pointer' }}>0'</button>
+                              <button onClick={() => setLI('tau', 45 + liS1)} style={{ padding: '1px 6px', fontSize: '9px', background: 'transparent', color: dm, border: `1px solid ${bd}`, borderRadius: '3px', cursor: 'pointer' }}>HT</button>
+                              <button onClick={() => setLI('tau', 90 + liS1)} style={{ padding: '1px 6px', fontSize: '9px', background: 'transparent', color: dm, border: `1px solid ${bd}`, borderRadius: '3px', cursor: 'pointer' }} title="90' — começam os acréscimos do 2º tempo">FT</button>
+                              <button onClick={() => setLI('tau', 90 + liS1 + liS2)} style={{ padding: '1px 6px', fontSize: '9px', background: 'transparent', color: dm, border: `1px solid ${bd}`, borderRadius: '3px', cursor: 'pointer' }} title="Fim do jogo (90' + acréscimos)">Fim</button>
+                            </div>
+                            <div style={{ display: 'flex', gap: '6px', alignItems: 'center', fontSize: '9px', color: dm, marginBottom: '6px', flexWrap: 'wrap' }}>
+                              <span>Acréscimos:</span>
+                              <span>1ºT +</span>
+                              <input type="number" min="0" max="15" value={li.s1} onChange={e => setLI('s1', e.target.value === '' ? 0 : +e.target.value)} style={{ width: '30px', padding: '1px', textAlign: 'center', background: card, color: tx, border: `1px solid ${bd}`, borderRadius: '3px', fontSize: '10px' }} />
+                              <span>2ºT +</span>
+                              <input type="number" min="0" max="15" value={li.s2} onChange={e => setLI('s2', e.target.value === '' ? 0 : +e.target.value)} style={{ width: '30px', padding: '1px', textAlign: 'center', background: card, color: tx, border: `1px solid ${bd}`, borderRadius: '3px', fontSize: '10px' }} />
+                              <span style={{ marginLeft: 'auto' }}>jogo total: {90 + liS1 + liS2}'</span>
                             </div>
                             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '8px' }}>
                               <div>
@@ -3311,8 +3665,28 @@ export default function WC2026() {
                                 <div style={{ fontSize: '14px', fontWeight: 700, color: bl }}>{liveP.pA.toFixed(1)}%</div>
                               </div>
                             </div>
+                            <div style={{ marginBottom: '6px' }}>
+                              <div style={{ fontSize: '8px', color: dm, marginBottom: '3px' }}>Placares finais mais prováveis</div>
+                              <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
+                                {liveP.scores.slice(0, 6).map(s => (
+                                  <span key={s.a + '-' + s.b} style={{ padding: '2px 7px', fontSize: '10px', borderRadius: '3px', background: `${acc}18`, border: `1px solid ${acc}33`, color: tx, fontWeight: 600 }}>{s.a}–{s.b} <span style={{ color: acc }}>{(s.p * 100).toFixed(1)}%</span></span>
+                                ))}
+                              </div>
+                              <div style={{ display: 'flex', gap: '5px', alignItems: 'center', marginTop: '5px', fontSize: '9px', color: dm, flexWrap: 'wrap' }}>
+                                <span>Placar de interesse:</span>
+                                <input type="number" min="0" max="20" value={li.csA} onChange={e => setLI('csA', e.target.value)} placeholder="-" style={{ width: '32px', padding: '2px', textAlign: 'center', background: card, color: tx, border: `1px solid ${bd}`, borderRadius: '3px', fontSize: '11px', fontWeight: 700 }} />
+                                <span>×</span>
+                                <input type="number" min="0" max="20" value={li.csB} onChange={e => setLI('csB', e.target.value)} placeholder="-" style={{ width: '32px', padding: '2px', textAlign: 'center', background: card, color: tx, border: `1px solid ${bd}`, borderRadius: '3px', fontSize: '11px', fontWeight: 700 }} />
+                                {li.csA !== '' && li.csB !== '' && (() => {
+                                  const sa = +li.csA, sb = +li.csB;
+                                  if (sa < (+li.gA || 0) || sb < (+li.gB || 0)) return <span style={{ color: rd }}>impossível (abaixo do placar atual)</span>;
+                                  const pcs = liveP.pOf(sa, sb) * 100;
+                                  return <span>→ <strong style={{ color: acc, fontSize: '11px' }}>{pcs >= 0.01 ? pcs.toFixed(2) : '<0.01'}%</strong> de terminar {sa}–{sb}</span>;
+                                })()}
+                              </div>
+                            </div>
                             <div style={{ fontSize: '9px', color: dm, textAlign: 'center' }}>Placar final esperado: <strong style={{ color: tx }}>{liveP.expScoreA.toFixed(1)} - {liveP.expScoreB.toFixed(1)}</strong> • λ restante: {liveP.laR.toFixed(2)}/{liveP.lbR.toFixed(2)} gols</div>
-                            <div style={{ fontSize: '8px', color: dm, marginTop: '4px', textAlign: 'center', fontStyle: 'italic' }}>Modelo: gols restantes ∝ tempo restante; cada cartão vermelho aplica 0.78× ao infrator e 1.12× ao adversário.</div>
+                            <div style={{ fontSize: '8px', color: dm, marginTop: '4px', textAlign: 'center', fontStyle: 'italic' }}>Modelo: a intensidade de gols cresce ao longo do jogo (~{Math.round(LIVE_F2 * 100)}% dos gols no 2º tempo) e os acréscimos jogam com a intensidade do fim de cada tempo; o total esperado da partida é preservado. Cada vermelho: 0.78× ao infrator, 1.12× ao adversário.</div>
                           </div>
                         )}
                         {isLive && (
@@ -3750,7 +4124,7 @@ export default function WC2026() {
               <p style={{ color: tx }}><strong style={{ color: acc }}>b) Explore cruzamentos.</strong> Com base nas simulações, descubra quais times, posições e jogos se cruzam em cada fase. Filtre por posição no grupo para ver cenários condicionais — ex: "se o Brasil terminar em 2° no grupo, quem ele enfrenta nas oitavas?"</p>
               <p style={{ color: tx }}><strong style={{ color: acc }}>c) Identifique os jogos mais interessantes.</strong> A aba Elo Jogos ranqueia todos os 104 jogos por qualidade (Elo), importância para o título (Champion Stake e Title Shift) e equilíbrio. Um score composto de Interesse destaca os top 10 jogos da fase de grupos.</p>
               <p style={{ color: tx }}><strong style={{ color: acc }}>d) Acompanhe a Copa em tempo real.</strong> Preencha resultados reais na aba Resultados e force classificações nos grupos. Rode a simulação novamente e veja como as probabilidades evoluem jogo a jogo. Cada resultado atualiza o bracket, as chances de título e os cruzamentos.</p>
-              <p style={{ color: tx }}><strong style={{ color: acc }}>e) Probabilidade ao vivo (intra-jogo).</strong> Na aba 📝 Resultados, clique em qualquer card de jogo para expandir e calcular as chances V/E/D considerando o minuto atual, o placar parcial e cartões vermelhos. Modelo: gols restantes esperados são proporcionais ao tempo restante; cada vermelho aplica 0.78× ao infrator e 1.12× ao adversário sobre o λ (Poisson).</p>
+              <p style={{ color: tx }}><strong style={{ color: acc }}>e) Probabilidade ao vivo (intra-jogo).</strong> Na aba 📝 Resultados, clique em qualquer card de jogo para expandir e calcular as chances V/E/D e os placares finais mais prováveis considerando o minuto atual (incluindo acréscimos de cada tempo, configuráveis), o placar parcial e cartões vermelhos. Modelo: a intensidade de gols cresce linearmente ao longo do jogo (~56% dos gols no 2º tempo regulamentar) e os acréscimos jogam com a intensidade do fim do tempo correspondente — o total esperado da partida é preservado; cada vermelho aplica 0.78× ao infrator e 1.12× ao adversário sobre o λ (Poisson).</p>
               <p style={{ color: tx }}><strong style={{ color: acc }}>f) Aba 📈 Evolução.</strong> Após preencher alguns resultados, vá em 📈 Evolução, escolha métrica (campeão/semi/QF/R16/passar de grupo) e até 6 seleções, e clique em "Calcular evolução". O simulador roda um MC após cada jogo preenchido e mostra como as chances de cada time mudaram ao longo da Copa.</p>
               <p style={{ color: tx }}><strong style={{ color: acc }}>g) Resultados fixos no código.</strong> Para resultados já oficiais, edite a constante <code style={{ color: bl, fontSize: '9px' }}>BUILT_IN_RESULTS</code> no topo do arquivo. Formato: <code style={{ color: bl, fontSize: '9px' }}>{'{1:{gA:1,gB:0}, 2:{gA:2,gB:1}, "k73":{gA:1,gB:1,pw:"B"}}'}</code>. Chaves numéricas (1-72) = fase de grupos; chaves <code style={{ color: bl, fontSize: '9px' }}>'kNN'</code> = mata-mata (73-104). <code style={{ color: bl, fontSize: '9px' }}>pw</code> opcional = vencedor pênaltis ('A' ou 'B').</p>
               <p style={{ color: tx }}><strong style={{ color: acc }}>e) Simule uma Copa específica.</strong> Use "Simular 1 Copa" para gerar um torneio completo com bracket, placares e campeão — um destino possível entre milhares.</p>

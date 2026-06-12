@@ -1,9 +1,15 @@
 # Metadados de sessão/IDE do Claude Code — não versionar
 .claude/
 
-# Artefatos transitórios de build (esbuild) — index.html é o build commitado
-node_modules/
-package.json
-package-lock.json
-entry.jsx
-bundle.js
+# Artefatos do pipeline de build/verificação (_build: fontes .cjs/.jsx são versionados)
+_build/node_modules/
+_build/app.jsx
+_build/bundle.js
+_build/shots/
+
+# Artefatos transitórios de build na raiz (esbuild) — index.html é o build commitado
+/node_modules/
+/package.json
+/package-lock.json
+/entry.jsx
+/bundle.js
