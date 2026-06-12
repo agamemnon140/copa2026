@@ -18,12 +18,15 @@ const code = [
   grab('const LIVE_F2', ';'),
   grab('const liveRemFrac = (tau, s1, s2', 'return Math.max(0, (Z - W) / Z);\n};'),
   grab('const fmtClock = (tau, s1)', "`90+${Math.round(tau - 90 - s1)}'`;"),
+  grab('const mulberry32 = (a)', '/ 4294967296;\n};'),
+  grab('const makeRnd = (seed, key)', '>>> 0);'),
+  grab('const sP = (l, rnd', 'return 7; };'),
   // stubs para liveProbs
   'const cL = () => ({ la: 1.5, lb: 1.1 });',
   'const matchTilt = () => 0;',
   grab('const liveProbs = (a, b, tA, tB,', 'scores, pOf };\n};'),
 ].join('\n');
-const { liveRemFrac, fmtClock, liveProbs } = eval(code + '\n;({ liveRemFrac, fmtClock, liveProbs });');
+const { liveRemFrac, fmtClock, liveProbs, makeRnd, sP } = eval(code + '\n;({ liveRemFrac, fmtClock, liveProbs, makeRnd, sP });');
 
 let fail = 0;
 const chk = (label, cond, extra) => { console.log((cond ? '✔' : '✘'), label, extra ?? ''); if (!cond) fail++; };
@@ -57,6 +60,18 @@ const lp80 = liveProbs(0, 0, '', '', { tau: 80 + s1, gA: 1, gB: 0, redsA: 0, red
 chk('pOf(0,0) com placar 1×0 = 0', lp80.pOf(0, 0) === 0);
 const lpEnd = liveProbs(0, 0, '', '', { tau: 90 + s1 + s2, gA: 1, gB: 0, redsA: 0, redsB: 0, s1, s2 });
 chk('fim do jogo 1×0: pH ≈ 100', lpEnd.pH > 99.7, lpEnd.pH.toFixed(2));
+
+// PRNG (Common Random Numbers do impacto leave-one-out)
+const seq = (seed, key, n = 10) => { const r = makeRnd(seed, key); return Array.from({ length: n }, () => r()); };
+chk('makeRnd determinístico (mesmo seed/key → mesma sequência)', JSON.stringify(seq(123, 7)) === JSON.stringify(seq(123, 7)));
+chk('makeRnd: keys diferentes → streams diferentes', JSON.stringify(seq(123, 7)) !== JSON.stringify(seq(123, 8)));
+chk('makeRnd: seeds vizinhas → streams diferentes', JSON.stringify(seq(123, 7)) !== JSON.stringify(seq(124, 7)));
+const big = seq(42, 0, 10000);
+chk('makeRnd: range [0,1)', big.every(v => v >= 0 && v < 1));
+const mean = big.reduce((s, v) => s + v, 0) / big.length;
+chk('makeRnd: média ≈ 0.5', mean > 0.48 && mean < 0.52, mean.toFixed(4));
+chk('sP determinístico com makeRnd', sP(1.5, makeRnd(1, 2)) === sP(1.5, makeRnd(1, 2)));
+chk('sP sem rnd ainda funciona (default Math.random)', Number.isInteger(sP(1.5)) && sP(1.5) >= 0 && sP(1.5) <= 7);
 
 console.log(fail === 0 ? '\nTODOS OS TESTES PASSARAM' : `\n${fail} TESTE(S) FALHARAM`);
 process.exit(fail ? 1 : 0);

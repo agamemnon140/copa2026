@@ -156,13 +156,25 @@ const cL = (a, b, tilt = 0) => {
   const c1 = 2 * (1 - c0);
   return { la: Math.max(.25, Math.min(3.8, me * (c0 + c1 * e))), lb: Math.max(.25, Math.min(3.8, me * (c0 + c1 * (1 - e)))) };
 };
-const sP = (l) => { let r = Math.random(), a = 0; for (let g = 0; g <= 7; g++) { a += pp(l, g); if (r < a) return g; } return 7; };
-const sM = (a, b, tA = '', tB = '') => { const { la, lb } = cL(a, b, matchTilt(tA, tB)); return { gA: sP(la), gB: sP(lb) }; };
-const sKO = (a, b, tA = '', tB = '') => {
+// PRNG determinístico (mulberry32) p/ Common Random Numbers no impacto leave-one-out.
+const mulberry32 = (a) => () => {
+  a = (a + 0x6D2B79F5) | 0;
+  let t = Math.imul(a ^ (a >>> 15), 1 | a);
+  t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+  return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+};
+// Substream por (semente da simulação, chave do jogo/decisão). Alinhamento POR CHAVE:
+// o jogo X consome os mesmos números nas duas sims do par, independente de quantos
+// randoms os outros jogos gastaram. Chaves: jogo de grupo = idx 0-71; KO = mn 73-104;
+// desempate do grupo = 200+(gn-65); sort dos 12 terceiros = 240.
+const makeRnd = (seed, key) => mulberry32((Math.imul(seed ^ 0x9E3779B9, 0x85EBCA6B) ^ Math.imul(key + 1, 0xC2B2AE35)) >>> 0);
+const sP = (l, rnd = Math.random) => { let r = rnd(), a = 0; for (let g = 0; g <= 7; g++) { a += pp(l, g); if (r < a) return g; } return 7; };
+const sM = (a, b, tA = '', tB = '', rnd = Math.random) => { const { la, lb } = cL(a, b, matchTilt(tA, tB)); return { gA: sP(la, rnd), gB: sP(lb, rnd) }; };
+const sKO = (a, b, tA = '', tB = '', rnd = Math.random) => {
   const mt = matchTilt(tA, tB);
-  let { gA, gB } = sM(a, b, tA, tB); let aet = false, pen = false;
-  if (gA === gB) { aet = true; const { la, lb } = cL(a, b, mt); gA += sP(la * .33); gB += sP(lb * .33); }
-  if (gA === gB) { pen = true; const penW = Math.random() < .5 + (a - b) / 4000 ? 'A' : 'B'; return { w: penW, gA, gB, aet, pen }; }
+  let { gA, gB } = sM(a, b, tA, tB, rnd); let aet = false, pen = false;
+  if (gA === gB) { aet = true; const { la, lb } = cL(a, b, mt); gA += sP(la * .33, rnd); gB += sP(lb * .33, rnd); }
+  if (gA === gB) { pen = true; const penW = rnd() < .5 + (a - b) / 4000 ? 'A' : 'B'; return { w: penW, gA, gB, aet, pen }; }
   return { w: gA > gB ? 'A' : 'B', gA, gB, aet, pen };
 };
 const ef = t => rtBase(t);
@@ -372,7 +384,7 @@ const h2hTable = (subset, gm) => {
 };
 // Resolve a ordem (e o critério) de um bloco de times com os MESMOS pontos gerais.
 // Aplica Step 1 (H2H) sobre quem continuar empatado, depois Step 2/3.
-const rankTied = (block, tb, gm, crit) => {
+const rankTied = (block, tb, gm, crit, rnd = Math.random) => {
   if (block.length === 1) return block;
   // Step 1 — confronto direto
   const h = h2hTable(block, gm);
@@ -387,7 +399,7 @@ const rankTied = (block, tb, gm, crit) => {
     if (same.length === 1) { out.push(same[0]); }
     else {
       // Step 2/3 sobre os que o H2H não separou: saldo geral → gols → FIFA → sorteio
-      const byOverall = [...same].sort((a, b) => tb[b].gd - tb[a].gd || tb[b].gf - tb[a].gf || (FP[b] || 0) - (FP[a] || 0) || Math.random() - .5);
+      const byOverall = [...same].sort((a, b) => tb[b].gd - tb[a].gd || tb[b].gf - tb[a].gf || (FP[b] || 0) - (FP[a] || 0) || rnd() - .5);
       byOverall.forEach((t, k) => { out.push(t); if (k < byOverall.length - 1 && crit) {
         const A = byOverall[k], B = byOverall[k + 1];
         crit[A] = tb[A].gd !== tb[B].gd ? 'gd' : tb[A].gf !== tb[B].gf ? 'gf' : (FP[A] || 0) !== (FP[B] || 0) ? 'fifa' : 'rand';
@@ -403,7 +415,7 @@ const rankTied = (block, tb, gm, crit) => {
   return out;
 };
 // Ordena um grupo inteiro pelos critérios FIFA. Retorna sorted + crit (critério que separou cada time do seguinte).
-const rankGroup = (teams, tb, gm) => {
+const rankGroup = (teams, tb, gm, rnd = Math.random) => {
   const crit = {};
   const byPts = [...teams].sort((a, b) => tb[b].pts - tb[a].pts);
   const sorted = [];
@@ -412,7 +424,7 @@ const rankGroup = (teams, tb, gm) => {
     let j = i + 1;
     while (j < byPts.length && tb[byPts[j]].pts === tb[byPts[i]].pts) j++;
     const block = byPts.slice(i, j);
-    const ordered = rankTied(block, tb, gm, crit);
+    const ordered = rankTied(block, tb, gm, crit, rnd);
     ordered.forEach(t => sorted.push(t));
     if (j < byPts.length) crit[sorted[sorted.length - 1]] = 'pts';
     i = j;
@@ -421,7 +433,12 @@ const rankGroup = (teams, tb, gm) => {
 };
 // ──────────────────────────────────────────────────────────────────────────────
 
-const runSim = (groups, ur, fp) => {
+const runSim = (groups, ur, fp, seed) => {
+  // seed != null → toda a aleatoriedade vem de substreams determinísticos por jogo/decisão
+  // (Common Random Numbers): dois runs com o mesmo seed e userRes diferindo em UM jogo
+  // produzem exatamente os mesmos sorteios em todo o resto do torneio.
+  const seeded = seed != null;
+  const rndFor = seeded ? (k) => makeRnd(seed, k) : null;
   const tb = {};
   for (const [gn, ts] of Object.entries(groups)) ts.forEach(t => { tb[t] = { g: gn, pts: 0, gf: 0, ga: 0, gd: 0, w: 0, d: 0, l: 0 }; });
   const pos = {};
@@ -431,7 +448,7 @@ const runSim = (groups, ur, fp) => {
     const rr = ur && ur[idx];
     let gA, gB;
     if (rr && rr.gA != null && rr.gB != null) { gA = rr.gA; gB = rr.gB; }
-    else { const im = _injM[idx]; const r = sM(efCity(h, city) - (im ? (im.h || 0) * INJ_ELO : 0), efCity(a, city) - (im ? (im.a || 0) * INJ_ELO : 0), h, a); gA = r.gA; gB = r.gB; }
+    else { const im = _injM[idx]; const r = sM(efCity(h, city) - (im ? (im.h || 0) * INJ_ELO : 0), efCity(a, city) - (im ? (im.a || 0) * INJ_ELO : 0), h, a, seeded ? rndFor(idx) : undefined); gA = r.gA; gB = r.gB; }
     tb[h].gf += gA; tb[h].ga += gB; tb[h].gd += gA - gB;
     tb[a].gf += gB; tb[a].ga += gA; tb[a].gd += gB - gA;
     if (gA > gB) { tb[h].pts += 3; tb[h].w++; tb[a].l++; }
@@ -444,11 +461,12 @@ const runSim = (groups, ur, fp) => {
   const tieCrit = {}; // tieCrit[team] = critério que separou esse time do PRÓXIMO no grupo
   for (const [gn, ts] of Object.entries(groups)) {
     const forced = fp && fp[gn];
+    const rndG = seeded ? rndFor(200 + gn.charCodeAt(0) - 65) : undefined; // substream do desempate deste grupo
     let s, crit = {};
     if (forced && forced.some(Boolean)) {
       const set = forced.filter(Boolean);
       const unset = ts.filter(t => !set.includes(t));
-      const sortedUnset = rankGroup(unset, tb, gm).sorted;
+      const sortedUnset = rankGroup(unset, tb, gm, rndG).sorted;
       s = [];
       let ui = 0;
       for (let i = 0; i < 4; i++) {
@@ -458,15 +476,16 @@ const runSim = (groups, ur, fp) => {
       }
       while (s.length < 4 && ui < sortedUnset.length) s.push(sortedUnset[ui++]);
     } else {
-      const rk = rankGroup(ts, tb, gm); s = rk.sorted; crit = rk.crit;
+      const rk = rankGroup(ts, tb, gm, rndG); s = rk.sorted; crit = rk.crit;
     }
     Object.assign(tieCrit, crit);
     st[gn] = { sorted: s, tb: Object.fromEntries(s.map(t => [t, tb[t]])) };
     s.forEach((t, i) => { pos[t] = gn + (i + 1); });
   }
 
+  const rnd3 = seeded ? rndFor(240) : Math.random; // substream do sorteio entre 3ºs empatados
   const thirds = Object.entries(st).map(([g, { sorted }]) => ({ team: sorted[2], group: g, ...tb[sorted[2]] }))
-    .sort((a, b) => b.pts - a.pts || b.gd - a.gd || b.gf - a.gf || (FP[b.team] || 0) - (FP[a.team] || 0) || Math.random() - .5);
+    .sort((a, b) => b.pts - a.pts || b.gd - a.gd || b.gf - a.gf || (FP[b.team] || 0) - (FP[a.team] || 0) || rnd3() - .5);
   const b8 = thirds.slice(0, 8), b8g = b8.map(t => t.group).sort();
   const b8m = Object.fromEntries(b8.map(t => [t.group, t.team]));
   const asgn = solve3rd(b8g);
@@ -480,7 +499,7 @@ const runSim = (groups, ur, fp) => {
     if (fx && fx.gA != null && fx.gB != null && fx.home === h && fx.away === a) {
       const w = fx.gA > fx.gB ? 'A' : fx.gA < fx.gB ? 'B' : (fx.pw === 'B' ? 'B' : 'A');
       r = { gA: fx.gA, gB: fx.gB, w, aet: false, pen: fx.gA === fx.gB };
-    } else r = sKO(ef(h), ef(a), h, a);
+    } else r = sKO(ef(h), ef(a), h, a, seeded ? rndFor(mn) : undefined); // CRN: mesmo substream por mn ainda que os participantes mudem entre os lados do par
     r32.push({ home: h, away: a, ...r, winner: r.w === 'A' ? h : a, mn, date: d, city: c, ph: pos[h], pa: pos[a], real: !!(fx && fx.home === h && fx.away === a) });
   };
   mk(S['A'], S['B'], 73, '28/Jun', 'Los Angeles');
@@ -506,7 +525,7 @@ const runSim = (groups, ur, fp) => {
     if (fx && fx.gA != null && fx.gB != null && fx.home === h && fx.away === a) {
       const w = fx.gA > fx.gB ? 'A' : fx.gA < fx.gB ? 'B' : (fx.pw === 'B' ? 'B' : 'A');
       r = { gA: fx.gA, gB: fx.gB, w, aet: false, pen: fx.gA === fx.gB };
-    } else r = sKO(efCity(h, c), efCity(a, c), h, a);
+    } else r = sKO(efCity(h, c), efCity(a, c), h, a, seeded ? rndFor(mn) : undefined);
     return { home: h, away: a, ...r, winner: r.w === 'A' ? h : a, date: d, city: c, mn, ph: pos[h], pa: pos[a], real: !!(fx && fx.home === h && fx.away === a) };
   };
 
@@ -1026,42 +1045,37 @@ export default function WC2026() {
   const doSingle = () => { _rSys = rSys; _customElo = customElo; _ME = customME; _useTilt = useTilt; _fav = favWeight; _spread = spread; _injM = injuries; _hb = homeAdv; setSingle(runSim(groups, userRes)); setTab('single'); };
 
   // ── Impacto leave-one-out de um resultado preenchido ────────────────────────
-  // Compara o universo atual (pool do último MC, que JÁ inclui o resultado) com um
-  // MC extra SEM aquele resultado (mantendo os demais). Sempre incondicional:
-  // o pool é gerado antes do filtro condicional (condições só agem no aggregate).
+  // Compara PARES de simulações com/sem o resultado usando as MESMAS sementes
+  // (Common Random Numbers): todos os outros jogos sorteiam idêntico nos dois lados,
+  // o ruído do Monte Carlo cancela e o Δ reflete só os caminhos que o resultado muda.
+  // Sempre incondicional (condições só agem no aggregate do pool).
   const looCacheRef = useRef(new Map()); // resKey ('12' | 'k89') -> {dCh, movers, nLoo}
-  // Qualquer mudança de resultados/settings invalida o cache (o baseline mudou).
+  // Qualquer mudança de resultados/settings invalida o cache (o universo mudou).
   useEffect(() => { looCacheRef.current.clear(); setImpactData({}); }, [userRes, injuries, rSys, customME, useTilt, favWeight, spread, homeAdv, pc, customElo]);
 
-  // Contagem "slim" de um conjunto de sims: campeão e presença na R32 por time.
-  const slimCounts = (sims) => {
-    const ch = {}, r32 = {}; let n = 0;
-    for (const sim of sims) {
-      n++;
-      ch[sim.fin.winner] = (ch[sim.fin.winner] || 0) + 1;
-      for (const m of sim.r32) { r32[m.home] = (r32[m.home] || 0) + 1; r32[m.away] = (r32[m.away] || 0) + 1; }
-    }
-    return { ch, r32, n };
-  };
-  // Núcleo síncrono: roda o MC sem o resultado e mede o deslocamento. Caro (~nLoo sims).
+  const LOO_SEED_BASE = 0x5EED; // fixa → o mesmo impacto recalculado (mesmos settings) dá o mesmo valor
+  // Núcleo síncrono: roda nLoo PARES de sims (com/sem o resultado) pareados por semente. Caro (~2·nLoo sims).
   const computeLoo = (resKey) => {
     const cached = looCacheRef.current.get(resKey);
     if (cached) { setImpactData(p => ({ ...p, [resKey]: cached })); return cached; }
     _rSys = rSys; _customElo = customElo; _ME = customME; _useTilt = useTilt; _fav = favWeight; _spread = spread; _injM = injuries; _hb = homeAdv;
-    const base = slimCounts(poolRef.current.pool);
     const urMinus = { ...userRes }; delete urMinus[resKey];
     const nLoo = Math.min(Math.max(100, Math.floor(+nSim) || 10000), 5000);
-    const loo = { ch: {}, r32: {}, n: nLoo };
+    const wC = { ch: {}, r32: {} }, oC = { ch: {}, r32: {} }; // with / without
+    const tally = (c, sim) => {
+      c.ch[sim.fin.winner] = (c.ch[sim.fin.winner] || 0) + 1;
+      for (const m of sim.r32) { c.r32[m.home] = (c.r32[m.home] || 0) + 1; c.r32[m.away] = (c.r32[m.away] || 0) + 1; }
+    };
     for (let i = 0; i < nLoo; i++) {
-      const sim = runSim(groups, urMinus);
-      loo.ch[sim.fin.winner] = (loo.ch[sim.fin.winner] || 0) + 1;
-      for (const m of sim.r32) { loo.r32[m.home] = (loo.r32[m.home] || 0) + 1; loo.r32[m.away] = (loo.r32[m.away] || 0) + 1; }
+      const s = LOO_SEED_BASE + i;
+      tally(wC, runSim(groups, userRes, null, s)); // COM o resultado
+      tally(oC, runSim(groups, urMinus, null, s)); // SEM o resultado — mesma semente (CRN)
     }
     // Δ por time em pontos percentuais: positivo = o resultado AUMENTOU a chance do time.
     const movers = all.map(t => ({
       t,
-      dCh: ((base.ch[t] || 0) / base.n - (loo.ch[t] || 0) / loo.n) * 100,
-      dR32: ((base.r32[t] || 0) / base.n - (loo.r32[t] || 0) / loo.n) * 100,
+      dCh: (((wC.ch[t] || 0) - (oC.ch[t] || 0)) / nLoo) * 100,
+      dR32: (((wC.r32[t] || 0) - (oC.r32[t] || 0)) / nLoo) * 100,
     })).sort((x, y) => Math.abs(y.dCh) - Math.abs(x.dCh) || Math.abs(y.dR32) - Math.abs(x.dR32));
     const dCh = movers.reduce((s, m) => s + Math.abs(m.dCh), 0) / 2; // distância de variação total (p.p.)
     const out = { dCh, movers: movers.slice(0, 5).filter(m => Math.abs(m.dCh) > 0.01 || Math.abs(m.dR32) > 0.01), nLoo };
@@ -1764,8 +1778,8 @@ export default function WC2026() {
                     {Object.keys(groups).map(gn => <GCard key={gn} gn={gn}/>)}
                   </div>
 
-                  {/* 3rd-place summary */}
-                  {g3p && <div style={{ marginBottom:'12px', padding:'6px 10px', background:card, borderRadius:'6px', border:`1px solid ${bd}`, maxWidth:'600px' }}>
+                  {/* 3rd-place summary — clicável: painel global dos 3ºs */}
+                  {g3p && <div onClick={() => setBracketSel(s => s?.type === 'thirds' ? null : { type: 'thirds' })} title="Clique para ver o panorama completo dos 3ºs" style={{ marginBottom:'12px', padding:'6px 10px', background:card, borderRadius:'6px', border:`1px solid ${bracketSel?.type === 'thirds' ? acc : bd}`, maxWidth:'600px', cursor:'pointer' }}>
                     <div style={{ fontSize:'9px', fontWeight:700, color:bl, marginBottom:'3px' }}>8 melhores 3°s (por prob. individual; Anexo C: {bestCombo})</div>
                     <div style={{ display:'flex', gap:'4px', flexWrap:'wrap' }}>
                       {Object.entries(g3p).sort((a,b)=>b[1]-a[1]).map(([gn, pct]) => {
@@ -1778,9 +1792,62 @@ export default function WC2026() {
                     </div>
                   </div>}
 
-                  {/* Painel de detalhe — clique em partida (MB) ou grupo (GCard) */}
+                  {/* Painel de detalhe — clique em partida (MB), grupo (GCard) ou resumo dos 3ºs */}
                   {bracketSel && (() => {
                     const closeBtn = <button onClick={() => setBracketSel(null)} style={{ background: 'transparent', border: 'none', color: rd, cursor: 'pointer', fontSize: '14px', lineHeight: 1, padding: 0 }}>✕</button>;
+                    if (bracketSel.type === 'thirds') {
+                      const ranked = Object.entries(g3p || {}).sort((a, b) => b[1] - a[1]); // [gn, pct]
+                      const thirdSlots = Object.entries(KO_SPEC).filter(([, v]) => v.a?.t === '3rd'); // [mn, spec] dos 8 matches que recebem 3ºs
+                      return (
+                        <div style={{ marginBottom: '12px', padding: '8px 10px', background: card, borderRadius: '6px', border: `1px solid ${acc}55`, maxWidth: '720px' }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                            <span style={{ fontSize: '11px', fontWeight: 700, color: acc }}>Terceiros lugares — quem avança e para onde vai</span>
+                            {closeBtn}
+                          </div>
+                          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', alignItems: 'start' }}>
+                            <div>
+                              <div style={{ fontSize: '9px', fontWeight: 700, color: bl, marginBottom: '2px' }}>P(3º avança) por grupo</div>
+                              {ranked.map(([gn, pct]) => {
+                                const isIn = top8set.has(gn);
+                                const cands = Object.entries(posWho?.[gn + '3'] || {}).sort((a, b) => b[1] - a[1]).slice(0, 2);
+                                return (
+                                  <div key={gn} style={{ display: 'grid', gridTemplateColumns: '24px 70px 36px 1fr', gap: '4px', alignItems: 'center', fontSize: '10px', padding: '1px 0' }}>
+                                    <span style={{ fontWeight: 700, color: isIn ? '#22c55e' : '#ef4444' }}>3°{gn}</span>
+                                    <div style={{ height: '8px', background: `${bl}18`, borderRadius: '2px' }}><div style={{ height: '100%', width: `${Math.min(pct, 100)}%`, background: isIn ? '#22c55e' : '#ef4444', borderRadius: '2px' }} /></div>
+                                    <span style={{ textAlign: 'right', fontWeight: 700, color: isIn ? '#22c55e' : '#ef4444' }}>{pct.toFixed(0)}%</span>
+                                    <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: dm }}>{cands.map(([t, c]) => `${fl(t)} ${nm(t)} ${(c / mcN * 100).toFixed(0)}%`).join(' · ')}</span>
+                                  </div>
+                                );
+                              })}
+                              <div style={{ fontSize: '8px', color: dm, marginTop: '4px', fontStyle: 'italic' }}>Barra = P(o 3º desse grupo estar entre os 8 que avançam); ao lado, quem mais provavelmente termina em 3º.</div>
+                            </div>
+                            <div>
+                              {comboList?.length > 0 && <>
+                                <div style={{ fontSize: '9px', fontWeight: 700, color: bl, marginBottom: '2px' }}>Combinações de 8 grupos mais prováveis</div>
+                                {comboList.slice(0, 8).map((c, i) => (
+                                  <div key={c.key} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '10px', padding: '1px 0', fontFamily: 'monospace' }}>
+                                    <span style={{ color: i === 0 ? acc : tx, fontWeight: i === 0 ? 700 : 400 }}>{c.key}{c.key === bestCombo ? ' ◂' : ''}</span>
+                                    <span style={{ fontWeight: 700, color: i === 0 ? acc : dm }}>{c.pct.toFixed(1)}%</span>
+                                  </div>
+                                ))}
+                              </>}
+                              <div style={{ fontSize: '9px', fontWeight: 700, color: bl, margin: '6px 0 2px' }}>Destino dos 3ºs na combinação {bestCombo} (Anexo C)</div>
+                              {thirdSlots.map(([mn, spec]) => {
+                                const slot = spec.a.s; // letra do slot W3
+                                const srcG = thirdAssign[slot]; // grupo cujo 3º cai aqui
+                                const t3 = srcG ? assign[srcG + '3'] : null;
+                                return (
+                                  <div key={mn} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '10px', padding: '1px 0' }}>
+                                    <span style={{ color: dm }}>M{mn} <span style={{ color: tx }}>{spec.l}</span> • {KO_CITY[mn]}</span>
+                                    <span style={{ fontWeight: 600 }}>3°{srcG || '?'}{t3 ? <span style={{ color: dm, fontWeight: 400 }}> ({fl(t3.t)} {nm(t3.t)})</span> : ''}</span>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    }
                     if (bracketSel.type === 'match') {
                       const mn = bracketSel.mn;
                       const who = Object.entries(matchWhoData?.[mn] || {}).sort((a, b) => b[1] - a[1]);
@@ -1982,7 +2049,7 @@ export default function WC2026() {
               return (
                 <div>
                   <div style={{ fontSize: '12px', fontWeight: 700, color: acc, marginBottom: '4px' }}>📰 Resultados inseridos — surpresa & impacto no torneio</div>
-                  <div style={{ fontSize: '10px', color: dm, marginBottom: '8px', lineHeight: 1.5, maxWidth: '760px' }}><strong style={{ color: tx }}>Surpresa</strong> = quão improvável era o placar exato antes do jogo, em bits (−log₂ P; cada +1 bit = metade da chance). <strong style={{ color: tx }}>Impacto</strong> = quanto o resultado moveu as chances de título: distância entre o universo atual e um Monte Carlo extra <em>sem</em> esse resultado (leave-one-out, mantendo os demais; sempre incondicional, ignora filtros).</div>
+                  <div style={{ fontSize: '10px', color: dm, marginBottom: '8px', lineHeight: 1.5, maxWidth: '760px' }}><strong style={{ color: tx }}>Surpresa</strong> = quão improvável era o placar exato antes do jogo, em bits (−log₂ P; cada +1 bit = metade da chance). <strong style={{ color: tx }}>Impacto</strong> = quanto o resultado moveu as chances de título: pares de simulações com sementes idênticas <em>com</em> e <em>sem</em> esse resultado (leave-one-out pareado — o ruído do Monte Carlo cancela e sobra só o efeito causal; sempre incondicional, ignora filtros).</div>
                   {rows.length === 0 ? <div style={{ padding: '30px', textAlign: 'center', color: dm, fontSize: '11px' }}>Nenhum resultado preenchido — preencha na aba 📝 Resultados.</div> : <>
                     <div style={{ display: 'flex', gap: '6px', alignItems: 'center', marginBottom: '8px', flexWrap: 'wrap' }}>
                       <SB active={surSort === 'bits'} onClick={() => setSurSort('bits')}>↓ Surpresa</SB>
@@ -2015,8 +2082,8 @@ export default function WC2026() {
                             </div>
                             {isExp && im && (
                               <div style={{ marginTop: '4px', padding: '5px 8px', background: '#0a0e18', borderRadius: '4px', border: `1px solid ${bd}` }}>
-                                <div style={{ fontSize: '8px', color: dm, fontWeight: 600, marginBottom: '3px' }}>Maiores deslocamentos de probabilidade causados por este resultado (vs. universo sem ele; {im.nLoo.toLocaleString()} sims, ruído ±~{(100 / Math.sqrt(im.nLoo)).toFixed(1)} p.p.)</div>
-                                {im.movers.length === 0 ? <div style={{ fontSize: '9px', color: dm }}>≈ nenhum deslocamento acima do ruído.</div> : im.movers.map(mv => (
+                                <div style={{ fontSize: '8px', color: dm, fontWeight: 600, marginBottom: '3px' }}>Maiores deslocamentos de probabilidade causados por este resultado ({im.nLoo.toLocaleString()} pares de sims com sementes idênticas — ruído MC cancelado; Δ reflete apenas os caminhos que o resultado muda)</div>
+                                {im.movers.length === 0 ? <div style={{ fontSize: '9px', color: dm }}>≈ nenhum deslocamento relevante.</div> : im.movers.map(mv => (
                                   <div key={mv.t} style={{ display: 'grid', gridTemplateColumns: '1fr 90px 90px', gap: '4px', fontSize: '10px', padding: '1px 0' }}>
                                     <span>{fl(mv.t)} {nm(mv.t)}</span>
                                     <span style={{ textAlign: 'right', fontWeight: 600, color: mv.dCh > 0 ? gn : mv.dCh < 0 ? rd : dm }}>🏆 {mv.dCh > 0 ? '+' : ''}{mv.dCh.toFixed(1)} p.p.</span>
@@ -2029,7 +2096,7 @@ export default function WC2026() {
                         );
                       })}
                     </div>
-                    <div style={{ fontSize: '8px', color: dm, marginTop: '6px', lineHeight: 1.5, maxWidth: '760px' }}>Surpresa e P(·) referem-se aos 90 minutos (no mata-mata, pênaltis não entram na conta). Impactos menores que ~1 p.p. são indistinguíveis do ruído do Monte Carlo. Mudar resultados ou configurações invalida os impactos calculados.</div>
+                    <div style={{ fontSize: '8px', color: dm, marginTop: '6px', lineHeight: 1.5, maxWidth: '760px' }}>Surpresa e P(·) referem-se aos 90 minutos (no mata-mata, pênaltis não entram na conta). O impacto usa pares de simulações com sementes idênticas (com/sem o resultado), o que elimina quase todo o ruído do Monte Carlo — valores pequenos são reais, não ruído. Mudar resultados ou configurações invalida os impactos calculados.</div>
                   </>}
                 </div>
               );
@@ -3530,9 +3597,9 @@ export default function WC2026() {
                               return (
                                 <div style={{ marginTop: '3px', display: 'flex', gap: '10px', alignItems: 'center', justifyContent: 'center', fontSize: '9px', flexWrap: 'wrap' }}>
                                   <span style={{ color: s.bitsExact > 6 ? rd : s.bitsExact > 4.5 ? '#f97316' : dm }} title="-log₂ da prob. pré-jogo do placar exato nos 90 minutos (pênaltis não entram)">🎯 surpresa {s.bitsExact.toFixed(1)} bits{tie ? " (90')" : ''} <span style={{ color: dm }}>(placar tinha {(s.pExact * 100).toFixed(1)}%, 1X2 tinha {(s.pOut * 100).toFixed(0)}%)</span></span>
-                                  {im ? <span style={{ color: im.dCh > 3 ? rd : im.dCh > 1 ? '#f97316' : dm }} title="Δ nas probabilidades de título vs. universo sem este resultado (leave-one-out)">⚡ Δtítulo {im.dCh.toFixed(1)} p.p.{im.movers[0] ? ` • ${nm(im.movers[0].t)} ${im.movers[0].dCh > 0 ? '+' : ''}${im.movers[0].dCh.toFixed(1)}` : ''}</span>
+                                  {im ? <span style={{ color: im.dCh > 3 ? rd : im.dCh > 1 ? '#f97316' : dm }} title="Δ nas probabilidades de título causado por este resultado (leave-one-out pareado, sementes idênticas)">⚡ Δtítulo {im.dCh.toFixed(1)} p.p.{im.movers[0] ? ` • ${nm(im.movers[0].t)} ${im.movers[0].dCh > 0 ? '+' : ''}${im.movers[0].dCh.toFixed(1)}` : ''}</span>
                                     : impactRun === sKey ? <span style={{ color: dm }}>⏳ calculando impacto…</span>
-                                    : <button onClick={() => looImpact(sKey)} disabled={!!impactRun || !poolRef.current?.pool} style={{ padding: '1px 6px', fontSize: '8px', background: 'transparent', color: poolRef.current?.pool ? bl : dm, border: `1px solid ${bd}`, borderRadius: '3px', cursor: poolRef.current?.pool && !impactRun ? 'pointer' : 'default' }} title="Mede quanto este resultado moveu as chances de título (roda um MC extra sem ele)">⚡ impacto</button>}
+                                    : <button onClick={() => looImpact(sKey)} disabled={!!impactRun || !poolRef.current?.pool} style={{ padding: '1px 6px', fontSize: '8px', background: 'transparent', color: poolRef.current?.pool ? bl : dm, border: `1px solid ${bd}`, borderRadius: '3px', cursor: poolRef.current?.pool && !impactRun ? 'pointer' : 'default' }} title="Mede quanto este resultado moveu as chances de título (pares de sims com/sem ele, mesmas sementes)">⚡ impacto</button>}
                                 </div>
                               );
                             })()}
@@ -3566,7 +3633,7 @@ export default function WC2026() {
                     const fx = userRes[m.idx];
                     const hasFx = fx?.gA != null && fx?.gB != null;
                     const isLive = liveCard === m.idx;
-                    const LI_DEF = { tau: 0, gA: 0, gB: 0, redsA: 0, redsB: 0, s1: 4, s2: 7, csA: '', csB: '' };
+                    const LI_DEF = { tau: 0, gA: 0, gB: 0, redsA: 0, redsB: 0, s1: 3, s2: 6, csA: '', csB: '' };
                     const li = { ...LI_DEF, ...(liveInputs[m.idx] || {}) };
                     const liS1 = Math.max(0, Math.min(15, +li.s1 || 0)), liS2 = Math.max(0, Math.min(15, +li.s2 || 0));
                     const liTau = Math.max(0, Math.min(90 + liS1 + liS2, +li.tau || 0)); // clamp: reduzir acréscimos depois de mover o slider não pode estourar
@@ -3605,9 +3672,9 @@ export default function WC2026() {
                           return (
                             <div style={{ marginTop: '3px', display: 'flex', gap: '10px', alignItems: 'center', justifyContent: 'center', fontSize: '9px', flexWrap: 'wrap' }}>
                               <span style={{ color: s.bitsExact > 6 ? rd : s.bitsExact > 4.5 ? '#f97316' : dm }} title="-log₂ da prob. pré-jogo do placar exato">🎯 surpresa {s.bitsExact.toFixed(1)} bits <span style={{ color: dm }}>(placar tinha {(s.pExact * 100).toFixed(1)}%, 1X2 tinha {(s.pOut * 100).toFixed(0)}%)</span></span>
-                              {im ? <span style={{ color: im.dCh > 3 ? rd : im.dCh > 1 ? '#f97316' : dm }} title="Δ nas probabilidades de título vs. universo sem este resultado (leave-one-out)">⚡ Δtítulo {im.dCh.toFixed(1)} p.p.{im.movers[0] ? ` • ${nm(im.movers[0].t)} ${im.movers[0].dCh > 0 ? '+' : ''}${im.movers[0].dCh.toFixed(1)}` : ''}</span>
+                              {im ? <span style={{ color: im.dCh > 3 ? rd : im.dCh > 1 ? '#f97316' : dm }} title="Δ nas probabilidades de título causado por este resultado (leave-one-out pareado, sementes idênticas)">⚡ Δtítulo {im.dCh.toFixed(1)} p.p.{im.movers[0] ? ` • ${nm(im.movers[0].t)} ${im.movers[0].dCh > 0 ? '+' : ''}${im.movers[0].dCh.toFixed(1)}` : ''}</span>
                                 : impactRun === sKey ? <span style={{ color: dm }}>⏳ calculando impacto…</span>
-                                : <button onClick={() => looImpact(sKey)} disabled={!!impactRun || !poolRef.current?.pool} style={{ padding: '1px 6px', fontSize: '8px', background: 'transparent', color: poolRef.current?.pool ? bl : dm, border: `1px solid ${bd}`, borderRadius: '3px', cursor: poolRef.current?.pool && !impactRun ? 'pointer' : 'default' }} title="Mede quanto este resultado moveu as chances de título (roda um MC extra sem ele)">⚡ impacto</button>}
+                                : <button onClick={() => looImpact(sKey)} disabled={!!impactRun || !poolRef.current?.pool} style={{ padding: '1px 6px', fontSize: '8px', background: 'transparent', color: poolRef.current?.pool ? bl : dm, border: `1px solid ${bd}`, borderRadius: '3px', cursor: poolRef.current?.pool && !impactRun ? 'pointer' : 'default' }} title="Mede quanto este resultado moveu as chances de título (pares de sims com/sem ele, mesmas sementes)">⚡ impacto</button>}
                             </div>
                           );
                         })()}

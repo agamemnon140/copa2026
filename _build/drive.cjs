@@ -58,7 +58,7 @@ const fail = (name, detail) => { results.push({ s: '❌', name, detail }); conso
   const slider = card.locator('input[type=range]');
   await setVal(slider, 47);
   t = await liveTxt();
-  if (t.includes("45+2'")) ok("Relógio: τ=47 com +4 de acréscimo → \"45+2'\""); else fail('Relógio em τ=47', t.match(/Min:[\s\S]{0,40}/)?.[0]);
+  if (t.includes("45+2'")) ok("Relógio: τ=47 com +3 de acréscimo → \"45+2'\""); else fail('Relógio em τ=47', t.match(/Min:[\s\S]{0,40}/)?.[0]);
 
   // zera acréscimo do 1ºT → mesmo τ vira 47'
   const s1Input = card.locator('input[type=number]').nth(2); // gA, gB do placar vêm antes? ordem: placar gA, gB, depois s1, s2…
@@ -66,9 +66,9 @@ const fail = (name, detail) => { results.push({ s: '❌', name, detail }); conso
   await setVal(s1Input, 0);
   t = await liveTxt();
   if (t.includes("47'")) probe("Acréscimo 1ºT → 0: mesmo τ=47 agora exibe \"47'\" (45+2' ≠ 47')"); else fail('Relógio após zerar s1', t.match(/Min:[\s\S]{0,40}/)?.[0]);
-  await setVal(s1Input, 4); // restaura
+  await setVal(s1Input, 3); // restaura o default novo
 
-  for (const [btn, want] of [["0'", "0'"], ['HT', "45+4'"], ['FT', "90'"], ['Fim', "90+7'"]]) {
+  for (const [btn, want] of [["0'", "0'"], ['HT', "45+3'"], ['FT', "90'"], ['Fim', "90+6'"]]) {
     await card.locator('button', { hasText: new RegExp('^' + btn.replace('+', '\\+') + '$') }).first().click();
     t = await liveTxt();
     const clock = t.match(/Min:\n([0-9+']+)/)?.[1] || t.match(/(\d+(?:\+\d+)?')/)?.[1];
@@ -116,6 +116,36 @@ const fail = (name, detail) => { results.push({ s: '❌', name, detail }); conso
   if (imp) ok('Botão ⚡ impacto → leave-one-out rodou', `Δtítulo ${imp[1]} p.p.${imp[2] || ''}`); else fail('Impacto não calculou');
   await page.screenshot({ path: path.join(SHOTS, '2-badges.png') });
 
+  // Determinismo do CRN: re-rodar o MC invalida o cache; o impacto recalculado deve ser IDÊNTICO
+  if (imp) {
+    await page.locator('button', { hasText: /^▶/ }).click(); // re-roda o Monte Carlo
+    await page.waitForFunction(() => document.body.innerText.includes('Por Grupo'), null, { timeout: 120000 }); // doMC troca p/ aba Probs ao terminar
+    await page.click('text=📝 Resultados');
+    await page.waitForSelector('text=🎯 surpresa', { timeout: 5000 });
+    await card.locator('button', { hasText: '⚡ impacto' }).click();
+    await page.waitForSelector('text=Δtítulo', { timeout: 120000 });
+    t = await card.innerText();
+    const imp2 = t.match(/⚡ Δtítulo ([\d.]+) p\.p\./);
+    if (imp2 && imp2[1] === imp[1]) probe('Impacto determinístico: recalculado após re-MC → idêntico', `${imp[1]} = ${imp2[1]} p.p.`);
+    else fail('Impacto não-determinístico após re-MC', `${imp?.[1]} vs ${imp2?.[1]}`);
+  }
+
+  // Viés ~0: resultado "esperado" (placar = moda do jogo) deve ter impacto pequeno
+  const modaM = (await card.innerText()).match(/⚽ (\d+)–(\d+)/);
+  if (modaM) {
+    await setVal(scoreA, +modaM[1]); await setVal(scoreB, +modaM[2]); // invalida cache (userRes mudou)
+    await page.waitForTimeout(200);
+    await card.locator('button', { hasText: '⚡ impacto' }).click();
+    await page.waitForSelector('text=Δtítulo', { timeout: 120000 });
+    t = await card.innerText();
+    const imp3 = t.match(/⚡ Δtítulo ([\d.]+) p\.p\./);
+    if (imp3 && +imp3[1] < 1.0) probe('Resultado esperado (moda) → impacto pequeno (sem viés de ruído)', `${modaM[1]}×${modaM[2]} → Δtítulo ${imp3[1]} p.p. (antes o ruído sozinho dava ~2)`);
+    else fail('Impacto de resultado esperado alto demais', imp3 ? imp3[1] + ' p.p.' : 'não calculou');
+    // restaura a zebra 0×4 p/ as seções seguintes (Surpresas)
+    await setVal(scoreA, 0); await setVal(scoreB, 4);
+    await page.waitForTimeout(200);
+  }
+
   /* ───── C. Bracket clicável ───── */
   await page.click('text=📊 Probs');
   await page.click('text=Bracket');
@@ -140,6 +170,20 @@ const fail = (name, detail) => { results.push({ s: '❌', name, detail }); conso
   // fecha pelo ✕
   const closeBtn = page.locator('button', { hasText: '✕' }).first();
   if (await closeBtn.count()) { await closeBtn.click(); probe('Botão ✕ fecha o painel de detalhe'); }
+
+  // painel global dos 3ºs
+  const thirdsCard = page.locator('[title="Clique para ver o panorama completo dos 3ºs"]');
+  await thirdsCard.click();
+  await page.waitForTimeout(300);
+  body = await page.locator('body').innerText();
+  if (body.includes('P(3º avança) por grupo') && body.includes('Destino dos 3ºs') && /M74/.test(body)) ok('Resumo dos 3ºs clicável → painel global (ranking + combinações + destinos R32)');
+  else fail('Painel dos 3ºs', body.match(/Terceiros lugares[\s\S]{0,120}/)?.[0] || 'não abriu');
+  await page.screenshot({ path: path.join(SHOTS, '4b-bracket-thirds.png') });
+  await thirdsCard.click();
+  await page.waitForTimeout(200);
+  body = await page.locator('body').innerText();
+  if (!body.includes('P(3º avança) por grupo')) probe('Clique repetido no resumo dos 3ºs fecha o painel (toggle)');
+  else fail('Toggle dos 3ºs não fechou');
 
   /* ───── D. Por Grupo moda/mediana coerente ───── */
   await page.click('text=Por Grupo');
