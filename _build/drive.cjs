@@ -109,42 +109,66 @@ const fail = (name, detail) => { results.push({ s: '❌', name, detail }); conso
   else if (bits) fail('Surpresa baixa demais para zebra 0×4', bits[1] + ' bits');
   else fail('Badge 🎯 surpresa não apareceu');
 
-  await card.locator('button', { hasText: '⚡ impacto' }).click();
-  await page.waitForSelector('text=Δtítulo', { timeout: 120000 });
+  // Badge de impacto aparece AUTOMATICAMENTE (sem botão), instantâneo
+  await page.waitForSelector('text=⚡ classif.', { timeout: 5000 });
   t = await card.innerText();
-  const imp = t.match(/⚡ Δtítulo ([\d.]+) p\.p\.( • [^\n]+)?/);
-  if (imp) ok('Botão ⚡ impacto → leave-one-out rodou', `Δtítulo ${imp[1]} p.p.${imp[2] || ''}`); else fail('Impacto não calculou');
+  const imp = t.match(/⚡ classif\.: (.+?) ([+-]?[\d.]+) p\.p\./);
+  if (imp && Math.abs(+imp[2]) > 8) ok('Zebra 0×4 → badge ⚡ classif. automático e grande', `${imp[1]} ${imp[2]} p.p.`);
+  else if (imp) fail('Impacto da zebra pequeno demais', `${imp[1]} ${imp[2]} p.p.`);
+  else fail('Badge ⚡ classif. não apareceu');
+  if (t.includes('⚡ impacto') || t.includes('calculando')) fail('Botão/spinner antigos ainda presentes');
   await page.screenshot({ path: path.join(SHOTS, '2-badges.png') });
 
-  // Determinismo do CRN: re-rodar o MC invalida o cache; o impacto recalculado deve ser IDÊNTICO
+  // Determinismo: sair da aba e voltar → badge idêntico (seed fixa, cache por cenário)
   if (imp) {
-    await page.locator('button', { hasText: /^▶/ }).click(); // re-roda o Monte Carlo
-    await page.waitForFunction(() => document.body.innerText.includes('Por Grupo'), null, { timeout: 120000 }); // doMC troca p/ aba Probs ao terminar
+    await page.click('text=📊 Probs');
     await page.click('text=📝 Resultados');
-    await page.waitForSelector('text=🎯 surpresa', { timeout: 5000 });
-    await card.locator('button', { hasText: '⚡ impacto' }).click();
-    await page.waitForSelector('text=Δtítulo', { timeout: 120000 });
-    t = await card.innerText();
-    const imp2 = t.match(/⚡ Δtítulo ([\d.]+) p\.p\./);
-    if (imp2 && imp2[1] === imp[1]) probe('Impacto determinístico: recalculado após re-MC → idêntico', `${imp[1]} = ${imp2[1]} p.p.`);
-    else fail('Impacto não-determinístico após re-MC', `${imp?.[1]} vs ${imp2?.[1]}`);
+    await page.waitForSelector('text=⚡ classif.', { timeout: 5000 });
+    const imp2 = (await card.innerText()).match(/⚡ classif\.: (.+?) ([+-]?[\d.]+) p\.p\./);
+    if (imp2 && imp2[2] === imp[2] && imp2[1] === imp[1]) probe('Impacto determinístico: sair e voltar da aba → idêntico', `${imp[1]} ${imp[2]} p.p.`);
+    else fail('Impacto mudou ao re-renderizar', `${imp?.[1]} ${imp?.[2]} vs ${imp2?.[1]} ${imp2?.[2]}`);
   }
 
-  // Viés ~0: resultado "esperado" (placar = moda do jogo) deve ter impacto pequeno
+  // Resultado "esperado" (placar = moda) deve mover menos que a zebra
   const modaM = (await card.innerText()).match(/⚽ (\d+)–(\d+)/);
-  if (modaM) {
-    await setVal(scoreA, +modaM[1]); await setVal(scoreB, +modaM[2]); // invalida cache (userRes mudou)
-    await page.waitForTimeout(200);
-    await card.locator('button', { hasText: '⚡ impacto' }).click();
-    await page.waitForSelector('text=Δtítulo', { timeout: 120000 });
-    t = await card.innerText();
-    const imp3 = t.match(/⚡ Δtítulo ([\d.]+) p\.p\./);
-    if (imp3 && +imp3[1] < 1.0) probe('Resultado esperado (moda) → impacto pequeno (sem viés de ruído)', `${modaM[1]}×${modaM[2]} → Δtítulo ${imp3[1]} p.p. (antes o ruído sozinho dava ~2)`);
-    else fail('Impacto de resultado esperado alto demais', imp3 ? imp3[1] + ' p.p.' : 'não calculou');
+  if (modaM && imp) {
+    await setVal(scoreA, +modaM[1]); await setVal(scoreB, +modaM[2]);
+    await page.waitForSelector('text=⚡ classif.', { timeout: 5000 });
+    const imp3 = (await card.innerText()).match(/⚡ classif\.: (.+?) ([+-]?[\d.]+) p\.p\./);
+    if (imp3 && Math.abs(+imp3[2]) < Math.abs(+imp[2])) probe('Placar = moda → |Δ| menor que o da zebra', `moda ${modaM[1]}×${modaM[2]}: ${imp3[2]} p.p. vs zebra ${imp[2]} p.p.`);
+    else fail('Impacto da moda não é menor que o da zebra', `${imp3?.[2]} vs ${imp[2]}`);
     // restaura a zebra 0×4 p/ as seções seguintes (Surpresas)
     await setVal(scoreA, 0); await setVal(scoreB, 4);
     await page.waitForTimeout(200);
   }
+
+  /* ───── B2. Impacto KO (analítico) ───── */
+  // Preenche os 6 jogos dos grupos A e B (placares 1×0) para liberar o M73 (A2×B2)
+  const fillGroup = async (gLetter) => {
+    const hdrs = page.locator('span').filter({ hasText: new RegExp(`[▶▼] Grupo ${gLetter} •`) });
+    const nG = await hdrs.count();
+    for (let i = 0; i < nG; i++) {
+      const c = hdrs.nth(i).locator('xpath=../..');
+      await setVal(c.locator('input[type=number]').nth(0), i === 0 && gLetter === 'A' ? 0 : 1); // 1º jogo do A já é 0×4
+      await setVal(c.locator('input[type=number]').nth(1), i === 0 && gLetter === 'A' ? 4 : 0);
+    }
+  };
+  await fillGroup('A'); await fillGroup('B');
+  await page.click('text=🥊 Mata-mata');
+  await page.waitForTimeout(400);
+  const m73 = page.locator('span').filter({ hasText: /^M73 •/ }).first().locator('xpath=../..');
+  const m73ready = !(await m73.innerText()).includes('aguardando');
+  if (m73ready) {
+    await setVal(m73.locator('input[type=number]').nth(0), 2);
+    await setVal(m73.locator('input[type=number]').nth(1), 1);
+    await page.waitForSelector('text=⚡ avança', { timeout: 5000 });
+    const ko = (await m73.innerText()).match(/⚡ avança: (.+?) \+([\d.]+) p\.p\./);
+    if (ko) ok('KO M73 → badge ⚡ avança analítico, sem botão', `${ko[1]} +${ko[2]} p.p.`);
+    else fail('Badge ⚡ avança não apareceu no M73');
+    await page.screenshot({ path: path.join(SHOTS, '2b-ko-badge.png') });
+  } else fail('M73 não ficou pronto após preencher grupos A e B');
+  await page.click('text=⚽ Jogos');
+  await page.waitForTimeout(200);
 
   /* ───── C. Bracket clicável ───── */
   await page.click('text=📊 Probs');
@@ -251,9 +275,22 @@ const fail = (name, detail) => { results.push({ s: '❌', name, detail }); conso
   const row = body.match(/0\s*×\s*4|0–4|0 × 4/);
   if (row) ok('Resultado inputado (0×4) listado na aba Surpresas');
   else fail('Resultado 0×4 não encontrado na lista', body.slice(0, 400));
-  if (/Δtítulo|p\.p\./.test(body)) ok('Impacto já calculado aparece na linha (cache compartilhado)');
-  // expande movers
-  const expandable = page.locator('text=🎯').first();
+  if (body.includes('Calcular impactos') || body.includes('calcular')) fail('Botões antigos de impacto ainda presentes na aba Surpresas');
+  else ok('Sem botões "Calcular impactos"/"calcular" — impactos automáticos');
+  const nRows = (body.match(/bits/g) || []).length - 1; // header não tem "bits"; cada linha tem
+  const nImps = (body.match(/⚡ /g) || []).length;
+  if (nImps >= nRows && nRows > 0) ok('Coluna Impacto preenchida em todas as linhas', `${nImps} ⚡ para ${nRows} linhas`);
+  else fail('Coluna Impacto incompleta', `${nImps} ⚡ para ${nRows} linhas`);
+  // expande a primeira linha → tabela Δ1º/Δ2º/Δ3º/ΔAvança (GS) ou P(avançar) (KO)
+  await page.locator('button', { hasText: '▼' }).first().click();
+  await page.waitForTimeout(200);
+  body = await page.locator('body').innerText();
+  if (body.includes('Δ Avança') || body.includes('Chance de avançar')) probe('Expansão ▼ mostra Δ por posição (GS) / P(avançar) (KO)');
+  else fail('Expansão da linha não mostrou detalhes', body.match(/Δ probabilidade[\s\S]{0,100}/)?.[0] || '');
+  // ordenação por impacto
+  await page.click('text=↓ Impacto');
+  await page.waitForTimeout(200);
+  probe('Ordenação ↓ Impacto aplicada sem erro');
   await page.screenshot({ path: path.join(SHOTS, '6-surpresas.png') });
 
   /* ───── erros de console ───── */
