@@ -1004,6 +1004,9 @@ export default function WC2026() {
   const [tab, setTab] = useState('groups');
   const [nSim, setNSim] = useState(() => lsLoad('nSim', 10000));
   const [running, setRunning] = useState(false);
+  const [mcProg, setMcProg] = useState(null); // % do MC em blocos (null = parado)
+  const [mcErr, setMcErr] = useState(null); // erro da última simulação (banner)
+  const mcAbortRef = useRef(false); // pedido de cancelamento entre chunks
   const [res, setRes] = useState(null);
   const [g3p, setG3p] = useState(null);
   const [muPct, setMuPct] = useState(null);
@@ -1104,17 +1107,42 @@ export default function WC2026() {
     setRes(r.p); setG3p(r.g3p); setMuPct(r.muPct); setComboList(r.comboList); setTmPct(r.tmPct); setPosMu(r.posMu); setPosTm(r.posTm); setPosWho(r.posWho); setTmPosData(r.tmPos); setPosVsTmData(r.posVsTm); setMatchTmData(r.matchTm); setMatchWhoData(r.matchWho); setMatchWinData(r.matchWin); setMatchPosData(r.matchPos); setDuelPosData(r.duelPos); setTpcData(r.tpc); setMatchByG3Data(r.matchByG3); setMatchChampData(r.matchChamp); setGsShiftData(r.gsShift); setKoShiftData(r.koShift); setCutoff3rdData(r.cutoff3rd); setScoreDistData(r.scoreDist); setTieAccData(r.tieAcc); setRecAdvData(r.recAdv);
   };
 
+  // MC em BLOCOS: nunca bloqueia a UI por mais de ~um chunk (importante em 100k+ sims).
+  // Progresso percentual visível, cancelável, e try/catch que aborta limpo em erro.
+  const cancelMC = () => { mcAbortRef.current = true; };
   const doMC = () => {
+    if (running) return; // já rodando (efeitos automáticos não cancelam nem empilham)
     const N = Math.max(100, Math.floor(+nSim) || 10000); // tolera campo vazio/inválido; sem teto superior
-    setRunning(true);
-    setTimeout(() => {
-      _rSys = rSys; _customElo = customElo; _ME = customME; _useTilt = useTilt; _fav = favWeight; _spread = spread; _injM = injuries; _hb = homeAdv;
-      const r = runMC(groups, N, userRes, conditions);
-      poolRef.current = { pool: r.pool, all: r.all, groups }; // guarda o universo para re-filtragem instantânea
-      applyAgg(r);
-      setMcMeta({ nAccepted: r.nAccepted, n: r.n, conds: conditions });
-      setRunning(false); setTab('probs');
-    }, 50);
+    setRunning(true); setMcProg(0); setMcErr(null);
+    mcAbortRef.current = false;
+    const pool = new Array(N);
+    const CHUNK = 2500;
+    let i = 0;
+    const step = () => {
+      try {
+        if (mcAbortRef.current) { setRunning(false); setMcProg(null); return; } // cancelado: mantém o universo anterior
+        // re-sincroniza os globais a cada chunk (outras interações podem rodar entre eles)
+        _rSys = rSys; _customElo = customElo; _ME = customME; _useTilt = useTilt; _fav = favWeight; _spread = spread; _injM = injuries; _hb = homeAdv;
+        const end = Math.min(N, i + CHUNK);
+        for (; i < end; i++) pool[i] = runSim(groups, userRes);
+        if (i < N) { setMcProg(Math.round(i / N * 100)); setTimeout(step, 0); return; }
+        setMcProg(100); // pinta 100% antes da agregação (que é um bloco único, ~1s em 250k)
+        setTimeout(() => {
+          try {
+            const all0 = Object.values(groups).flat();
+            const r = { ...aggregate(pool, all0, groups, conditions), n: N, pool, all: all0 };
+            poolRef.current = { pool: r.pool, all: r.all, groups }; // guarda o universo para re-filtragem instantânea
+            applyAgg(r);
+            setMcMeta({ nAccepted: r.nAccepted, n: r.n, conds: conditions });
+            setRunning(false); setMcProg(null); setTab('probs');
+          } catch (err) { setRunning(false); setMcProg(null); setMcErr('Falha ao agregar a simulação: ' + (err?.message || err)); }
+        }, 0);
+      } catch (err) {
+        setRunning(false); setMcProg(null);
+        setMcErr('Falha na simulação (' + i.toLocaleString() + '/' + N.toLocaleString() + '): ' + (err?.message || err));
+      }
+    };
+    setTimeout(step, 30);
   };
 
   // Re-filtra o pool existente sob as condições atuais — instantâneo, sem re-simular, sem ruído.
@@ -1487,8 +1515,8 @@ export default function WC2026() {
         <select value={nSim} onChange={e => setNSim(+e.target.value)} style={{ padding: '5px 8px', background: card, color: tx, border: `1px solid ${bd}`, borderRadius: '5px', fontSize: '12px' }}>
           {[10000, 50000, 100000, 250000].map(n => <option key={n} value={n}>{n.toLocaleString()}</option>)}
         </select>
-        <button onClick={doMC} disabled={running} style={{ padding: '7px 16px', fontSize: '12px', fontWeight: 700, color: '#000', background: `linear-gradient(135deg,${gd},${acc})`, border: 'none', borderRadius: '6px', cursor: running ? 'wait' : 'pointer' }}>
-          {running ? '⏳...' : `▶ ${(+nSim || 0).toLocaleString()}`}
+        <button onClick={running ? cancelMC : doMC} title={running ? 'Clique para cancelar (mantém o resultado anterior)' : 'Rodar o Monte Carlo'} style={{ padding: '7px 16px', fontSize: '12px', fontWeight: 700, color: '#000', background: running ? `linear-gradient(90deg, ${gd} ${mcProg || 0}%, ${bd} ${mcProg || 0}%)` : `linear-gradient(135deg,${gd},${acc})`, border: 'none', borderRadius: '6px', cursor: 'pointer', minWidth: '92px' }}>
+          {running ? (mcProg >= 100 ? '⏳ agregando…' : `⏳ ${mcProg || 0}% ✕`) : `▶ ${(+nSim || 0).toLocaleString()}`}
         </button>
         <button onClick={doSingle} style={{ padding: '7px 14px', fontSize: '12px', fontWeight: 600, color: tx, background: card, border: `1px solid ${bd}`, borderRadius: '6px', cursor: 'pointer' }}>🎲 Simular 1 Copa</button>
         <select value={rSys} onChange={e => setRSys(e.target.value)} style={{ padding: '5px 8px', background: card, color: acc, border: `1px solid ${bd}`, borderRadius: '5px', fontSize: '11px', fontWeight: 600 }}>
@@ -1511,6 +1539,10 @@ export default function WC2026() {
         {conditions.length > 0 && <span style={{ fontSize: '10px', color: acc }}>🔎 {conditions.length} condição(ões)</span>}
         {mcMeta && mcMeta.conds && mcMeta.conds.length > 0 && <span style={{ fontSize: '10px', color: mcMeta.nAccepted < 200 ? rd : gn }}>· {mcMeta.nAccepted.toLocaleString()}/{mcMeta.n.toLocaleString()} aceitas ({(mcMeta.nAccepted / mcMeta.n * 100).toFixed(1)}%)</span>}
       </div>
+      {mcErr && <div style={{ margin: '0 10px 6px', padding: '6px 10px', fontSize: '10px', color: rd, background: '#ef444415', border: '1px solid #ef444444', borderRadius: '5px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px' }}>
+        <span>⚠ {mcErr} — o resultado anterior foi mantido. Tente rodar de novo (se persistir, reduza o nº de simulações).</span>
+        <button onClick={() => setMcErr(null)} style={{ background: 'transparent', border: 'none', color: rd, cursor: 'pointer', fontSize: '13px', lineHeight: 1, padding: 0 }}>✕</button>
+      </div>}
 
       {/* Tabs */}
       <nav style={{ display: 'flex', gap: '1px', padding: '5px 10px', background: '#0d1220', overflowX: 'auto', borderBottom: `1px solid ${bd}` }}>

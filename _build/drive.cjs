@@ -371,6 +371,30 @@ const fail = (name, detail) => { results.push({ s: '❌', name, detail }); conso
   probe('Ordenação ↓ Impacto aplicada sem erro');
   await page.screenshot({ path: path.join(SHOTS, '6-surpresas.png') });
 
+  /* ───── F. MC em blocos: progresso, conclusão e cancelamento ───── */
+  const nSimSel = page.locator('select').first(); // select do nº de sims na barra superior
+  await nSimSel.selectOption('100000');
+  await page.locator('button', { hasText: /^▶/ }).click();
+  try {
+    await page.waitForFunction(() => /⏳ \d+% ✕/.test(document.body.innerText), null, { timeout: 15000 });
+    ok('MC 100k: progresso percentual visível durante a execução');
+  } catch { fail('Progresso do MC 100k não apareceu'); }
+  const t0 = Date.now();
+  await page.waitForFunction(() => document.body.innerText.includes('Por Grupo'), null, { timeout: 300000 });
+  ok('MC 100k concluiu em blocos sem travar', ((Date.now() - t0) / 1000).toFixed(1) + 's após o progresso');
+  body = await page.locator('body').innerText();
+  if (!body.includes('⚠')) probe('Sem banner de erro após o MC 100k');
+  // cancelamento: inicia 250k e cancela no meio
+  await nSimSel.selectOption('250000');
+  await page.locator('button', { hasText: /^▶/ }).click();
+  await page.waitForFunction(() => /⏳ \d+% ✕/.test(document.body.innerText), null, { timeout: 15000 });
+  await page.locator('button', { hasText: /⏳ \d+% ✕/ }).click(); // clique durante a execução = cancelar
+  try {
+    await page.waitForFunction(() => /▶ 250[.,]000/.test(document.body.innerText), null, { timeout: 20000 });
+    ok('Cancelamento do MC 250k: volta ao botão ▶ e mantém o universo anterior');
+  } catch { fail('Cancelamento não retornou o botão ▶'); }
+  await nSimSel.selectOption('10000'); // restaura
+
   /* ───── erros de console ───── */
   const realErrors = consoleErrors.filter(e => !(e.includes('404') && notFound.every(u => u.endsWith('favicon.ico'))));
   if (notFound.length) probe('404s observados (recursos, não o app)', JSON.stringify(notFound));
