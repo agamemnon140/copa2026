@@ -223,12 +223,30 @@ const fail = (name, detail) => { results.push({ s: '❌', name, detail }); conso
   await sels.nth(1).selectOption('Argentina');
   await page.waitForTimeout(300);
   const duelBody = await page.locator('body').innerText();
-  if (duelBody.includes('📜 Confrontos em Copas') && duelBody.includes('1990') && /em \d+ jogos/.test(duelBody))
-    ok('Duelo Brasil×Argentina → H2H com retrospecto e jogos históricos', duelBody.match(/em (\d+) jogos/)?.[0]);
+  if (duelBody.includes('📜 Confrontos em Copas') && duelBody.includes('1990') && /\d+ jogos/.test(duelBody))
+    ok('Duelo Brasil×Argentina → H2H com retrospecto e jogos históricos', duelBody.match(/(\d+) jogos/)?.[0]);
   else fail('H2H no Duelo', duelBody.match(/📜[\s\S]{0,150}/)?.[0] || 'box ausente');
-  await page.screenshot({ path: path.join(SHOTS, '7-h2h-duelo.png') });
+  // abas fundidas: Confronto sumiu como SB e a análise aparece dentro do Duelo
+  if (!(await page.locator('button', { hasText: /^Confronto$/ }).count()) && duelBody.includes('Análise do confronto'))
+    ok('Abas Duelo+Confronto fundidas (análise no fim do Duelo, sem SB separado)');
+  else fail('Fusão Duelo/Confronto', 'SB Confronto ainda existe ou análise ausente');
+  if (duelBody.includes('Placar moda')) probe('Análise do confronto renderiza (placar moda/mediana) com os mesmos selects');
+  await page.screenshot({ path: path.join(SHOTS, '7-h2h-duelo.png'), fullPage: true });
   await page.click('text=📝 Resultados');
   await page.waitForTimeout(200);
+
+  /* ───── B4. Filtro por grupo na aba Resultados ───── */
+  await page.locator('button', { hasText: /^C$/ }).first().click();
+  await page.waitForTimeout(200);
+  let resBody = await page.locator('body').innerText();
+  const grpsShown = [...new Set([...resBody.matchAll(/[▶▼] Grupo ([A-L]) •/g)].map(x => x[1]))];
+  if (grpsShown.length === 1 && grpsShown[0] === 'C') ok('Filtro por grupo: só jogos do Grupo C visíveis', grpsShown.join(','));
+  else fail('Filtro por grupo C', 'grupos visíveis: ' + grpsShown.join(','));
+  await page.locator('button', { hasText: /^Todos$/ }).click();
+  await page.waitForTimeout(200);
+  resBody = await page.locator('body').innerText();
+  const grpsAll = [...new Set([...resBody.matchAll(/[▶▼] Grupo ([A-L]) •/g)].map(x => x[1]))];
+  if (grpsAll.length === 12) probe('Filtro "Todos" restaura os 12 grupos'); else fail('Filtro Todos', grpsAll.length + ' grupos');
 
   /* ───── C. Bracket clicável ───── */
   await page.click('text=📊 Probs');

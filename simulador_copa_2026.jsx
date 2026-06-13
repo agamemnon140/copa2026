@@ -1048,14 +1048,13 @@ export default function WC2026() {
   const [g3filter, setG3filter] = useState({});
   const [gamePos, setGamePos] = useState(''); // '' = all positions, 'I1' = specific position
   const [resView, setResView] = useState('games');
+  const [resGrp, setResGrp] = useState('all'); // filtro por grupo na view ⚽ Jogos ('all' | 'A'..'L')
   const [resStat, setResStat] = useState('mode'); // 'mode' | 'median' | 'mean' para o placar de referência nos cards
   const [grpView, setGrpView] = useState('');
   const [grpStat, setGrpStat] = useState('mean'); // 'mean' | 'median' para pts/gols na view Por Grupo
   const [grpWDL, setGrpWDL] = useState(false); // mostrar colunas V/E/D na view Por Grupo
   const [eloPhase, setEloPhase] = useState('all');
-  const [duelA, setDuelA] = useState('Brazil');
   const [scFilter, setScFilter] = useState('all');
-  const [duelB, setDuelB] = useState('Argentina'); // '' = groups, 'po' = playoffs
   const [probsView, setProbsView] = useState('bracket'); // 'table' | 'group' // 'games' | 'standings' | 'forced'
   const [selPos, setSelPos] = useState('C1');
   const [posMode, setPosMode] = useState('pos'); // 'pos' or 'team' -- show opponents as positions or teams
@@ -1415,14 +1414,14 @@ export default function WC2026() {
       <div style={{ marginTop: '6px', padding: '8px 10px', background: '#0d111d', borderRadius: '4px', border: `1px solid ${bd}` }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: '4px', flexWrap: 'wrap', gap: '4px' }}>
           <span style={{ fontSize: '10px', fontWeight: 700, color: gd }}>📜 Confrontos em Copas</span>
-          {matches.length > 0 && <span style={{ fontSize: '9px', color: dm }}>{nm(a)}: <strong style={{ color: tally.wA > tally.wB ? gn : tx }}>{tally.wA}V</strong> <strong style={{ color: tx }}>{tally.d}E</strong> <strong style={{ color: tally.wB > tally.wA ? rd : tx }}>{tally.wB}D</strong> em {matches.length} jogo{matches.length > 1 ? 's' : ''}</span>}
+          {matches.length > 0 && <span style={{ fontSize: '9px', color: dm }}><span style={{ color: gn }}>{nm(a)}</span> <strong style={{ color: gn }}>{tally.wA}V</strong> <strong style={{ color: tx }}>{tally.d}E</strong> <strong style={{ color: bl }}>{tally.wB}V</strong> <span style={{ color: bl }}>{nm(b)}</span> · {matches.length} jogo{matches.length > 1 ? 's' : ''}</span>}
         </div>
         {matches.length === 0 ? <div style={{ fontSize: '9px', color: dm, fontStyle: 'italic' }}>{nm(a)} e {nm(b)} nunca se enfrentaram em Copas (1930-2022).</div>
           : matches.map((m2, i) => (
             <div key={i} style={{ display: 'grid', gridTemplateColumns: '34px 78px 1fr', gap: '6px', alignItems: 'center', fontSize: '10px', padding: '1px 0' }}>
               <span style={{ color: gd, fontWeight: 600 }}>{m2.y}</span>
               <span style={{ color: bl, fontSize: '9px' }}>{WCH_ST[m2.st] || m2.st}{m2.rep ? ' (desempate)' : ''}</span>
-              <span>{fl(m2.h)} {nm(m2.h)} <strong style={{ color: m2.gh > m2.ga ? gn : m2.gh < m2.ga ? rd : tx }}>{m2.gh}–{m2.ga}</strong> {nm(m2.a)} {fl(m2.a)}{typeof m2.pen === 'string' ? <span style={{ color: dm, fontSize: '9px' }}> (pên {m2.pen.replace('-', '–')})</span> : m2.pen === 1 ? <span style={{ color: dm, fontSize: '9px' }}> (prorr.)</span> : null}</span>
+              <span>{fl(m2.h)} {nm(m2.h)} <strong style={{ color: m2.gh === m2.ga ? tx : (m2.gh > m2.ga ? m2.h : m2.a) === a ? gn : bl }} title={m2.gh === m2.ga ? 'empate' : `vitória de ${nm(m2.gh > m2.ga ? m2.h : m2.a)}`}>{m2.gh}–{m2.ga}</strong> {nm(m2.a)} {fl(m2.a)}{typeof m2.pen === 'string' ? <span style={{ color: dm, fontSize: '9px' }}> (pên {m2.pen.replace('-', '–')})</span> : m2.pen === 1 ? <span style={{ color: dm, fontSize: '9px' }}> (prorr.)</span> : null}</span>
             </div>
           ))}
         <div style={{ fontSize: '7px', color: `${dm}99`, marginTop: '4px' }}>Fonte: Fjelstul World Cup Database (CC-BY 4.0)</div>
@@ -2120,7 +2119,6 @@ export default function WC2026() {
               <SB active={muView === 'cutoff'} onClick={() => setMuView('cutoff')}>Corte 3°</SB>
               <SB active={muView === 'scores'} onClick={() => setMuView('scores')}>Placares</SB>
               <SB active={muView === 'tie'} onClick={() => setMuView('tie')}>Desempate</SB>
-              <SB active={muView === 'confronto'} onClick={() => setMuView('confronto')}>Confronto</SB>
               <SB active={muView === 'path'} onClick={() => setMuView('path')}>Path</SB>
               <SB active={muView === 'surpresas'} onClick={() => setMuView('surpresas')}>Surpresas</SB>
             </div>
@@ -2919,25 +2917,27 @@ export default function WC2026() {
             })()}
 
             {muView === 'duel' && (<>
-              <div style={{ fontSize: '12px', fontWeight: 700, marginBottom: '8px', color: bl }}>Probabilidade de confronto entre dois times</div>
+              <div style={{ fontSize: '12px', fontWeight: 700, marginBottom: '8px', color: bl }}>Duelo — chance de se cruzarem, histórico e análise do confronto</div>
               <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginBottom: '12px', flexWrap: 'wrap' }}>
-                <select value={duelA} onChange={e => setDuelA(e.target.value)} style={{ padding: '6px', background: card, color: tx, border: `1px solid ${bd}`, borderRadius: '5px', fontSize: '12px' }}>
-                  {all.sort((a, b) => rt(b) - rt(a)).map(t => <option key={t} value={t}>{nm(t)}</option>)}
+                <select value={confA} onChange={e => setConfA(e.target.value)} style={{ padding: '6px', background: card, color: tx, border: `1px solid ${bd}`, borderRadius: '5px', fontSize: '12px' }}>
+                  {all.sort((a, b) => rt(b) - rt(a)).map(t => <option key={t} value={t}>{fl(t)} {nm(t)}</option>)}
                 </select>
                 <span style={{ color: dm, fontSize: '13px' }}>vs</span>
-                <select value={duelB} onChange={e => setDuelB(e.target.value)} style={{ padding: '6px', background: card, color: tx, border: `1px solid ${bd}`, borderRadius: '5px', fontSize: '12px' }}>
-                  {all.sort((a, b) => rt(b) - rt(a)).map(t => <option key={t} value={t}>{nm(t)}</option>)}
+                <select value={confB} onChange={e => setConfB(e.target.value)} style={{ padding: '6px', background: card, color: tx, border: `1px solid ${bd}`, borderRadius: '5px', fontSize: '12px' }}>
+                  {all.sort((a, b) => rt(b) - rt(a)).map(t => <option key={t} value={t}>{fl(t)} {nm(t)}</option>)}
                 </select>
+                <button onClick={() => setConfKO(v => !v)} style={{ padding: '5px 10px', fontSize: '11px', fontWeight: 700, background: confKO ? `${acc}33` : card, color: confKO ? acc : dm, border: `1px solid ${confKO ? acc : bd}`, borderRadius: '5px', cursor: 'pointer' }} title="Alterna a análise do confronto entre jogo normal e mata-mata (prorrogação + pênaltis)">{confKO ? '🥊 Mata-mata' : '⚽ Jogo normal'}</button>
+                <span style={{ fontSize: '9px', color: dm }}>ΔElo {rtBase(confA) - rtBase(confB) >= 0 ? '+' : ''}{rtBase(confA) - rtBase(confB)}</span>
               </div>
-              {duelA === duelB ? <div style={{ color: dm, fontSize: '11px' }}>Selecione dois times diferentes.</div> : (() => {
-                const k1 = [duelA, duelB].sort().join('|');
-                const grpA = Object.entries(groups).find(([,ts]) => ts.includes(duelA))?.[0];
-                const grpB = Object.entries(groups).find(([,ts]) => ts.includes(duelB))?.[0];
+              {confA === confB ? <div style={{ color: dm, fontSize: '11px' }}>Selecione dois times diferentes.</div> : (() => {
+                const k1 = [confA, confB].sort().join('|');
+                const grpA = Object.entries(groups).find(([,ts]) => ts.includes(confA))?.[0];
+                const grpB = Object.entries(groups).find(([,ts]) => ts.includes(confB))?.[0];
                 const sameGroup = grpA === grpB;
                 // Group stage: check if they play each other
                 const gsMatch = sameGroup ? GS.findIndex(([gn, hi, ai]) => {
                   const ts = groups[gn];
-                  return (ts[hi] === duelA && ts[ai] === duelB) || (ts[hi] === duelB && ts[ai] === duelA);
+                  return (ts[hi] === confA && ts[ai] === confB) || (ts[hi] === confB && ts[ai] === confA);
                 }) : -1;
 
                 const phases = ['r32', 'r16', 'qf', 'sf', 'fin'];
@@ -2955,29 +2955,29 @@ export default function WC2026() {
                 const totalKO = anyPhase;
 
                 // Poisson probabilities if they meet
-                const eA = efCity(duelA, 'MetLife'), eB = efCity(duelB, 'MetLife');
-                const pr = mProbs(eA, eB, duelA, duelB);
+                const eA = efCity(confA, 'MetLife'), eB = efCity(confB, 'MetLife');
+                const pr = mProbs(eA, eB, confA, confB);
 
                 return (
                   <div style={{ maxWidth: '500px' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px', padding: '10px', background: card, borderRadius: '8px', border: `1px solid ${bd}` }}>
                       <div style={{ textAlign: 'center', flex: 1 }}>
-                        <div style={{ fontSize: '20px' }}>{fl(duelA)}</div>
-                        <div style={{ fontSize: '12px', fontWeight: 700 }}>{nm(duelA)}</div>
-                        <div style={{ fontSize: '10px', color: dm }}>{rt(duelA)} pts • Grupo {grpA}</div>
+                        <div style={{ fontSize: '20px' }}>{fl(confA)}</div>
+                        <div style={{ fontSize: '12px', fontWeight: 700 }}>{nm(confA)}</div>
+                        <div style={{ fontSize: '10px', color: dm }}>{rt(confA)} pts • Grupo {grpA}</div>
                       </div>
                       <div style={{ textAlign: 'center', padding: '0 10px' }}>
                         <div style={{ fontSize: '9px', color: dm }}>Se se enfrentarem</div>
-                        <div style={{ fontSize: '11px' }}><span style={{ color: '#22c55e' }}>{pr.pH.toFixed(0)}%</span> <span style={{ color: dm }}>—</span> <span style={{ color: bl }}>{pr.pD.toFixed(0)}%</span> <span style={{ color: dm }}>—</span> <span style={{ color: '#ef4444' }}>{pr.pA.toFixed(0)}%</span></div>
+                        <div style={{ fontSize: '11px' }}><span style={{ color: gn }} title={`vitória de ${nm(confA)}`}>{pr.pH.toFixed(0)}%</span> <span style={{ color: dm }}>—</span> <span style={{ color: dm }} title="empate">{pr.pD.toFixed(0)}%</span> <span style={{ color: dm }}>—</span> <span style={{ color: bl }} title={`vitória de ${nm(confB)}`}>{pr.pA.toFixed(0)}%</span></div>
                       </div>
                       <div style={{ textAlign: 'center', flex: 1 }}>
-                        <div style={{ fontSize: '20px' }}>{fl(duelB)}</div>
-                        <div style={{ fontSize: '12px', fontWeight: 700 }}>{nm(duelB)}</div>
-                        <div style={{ fontSize: '10px', color: dm }}>{rt(duelB)} pts • Grupo {grpB}</div>
+                        <div style={{ fontSize: '20px' }}>{fl(confB)}</div>
+                        <div style={{ fontSize: '12px', fontWeight: 700 }}>{nm(confB)}</div>
+                        <div style={{ fontSize: '10px', color: dm }}>{rt(confB)} pts • Grupo {grpB}</div>
                       </div>
                     </div>
 
-                    {h2hBox(duelA, duelB)}
+                    {h2hBox(confA, confB)}
 
                     {sameGroup && <div style={{ background: `${gn}15`, border: `1px solid ${gn}44`, borderRadius: '6px', padding: '8px 12px', marginBottom: '10px' }}>
                       <div style={{ fontSize: '11px', fontWeight: 700, color: gn }}>Mesmo grupo ({grpA}) — jogam na fase de grupos</div>
@@ -3001,8 +3001,8 @@ export default function WC2026() {
                         const [first] = k1.split('|');
                         breakdown = Object.entries(dpRd).map(([dpk, c]) => {
                           const [pF, pS] = dpk.split('|');
-                          const posA = first === duelA ? pF : pS;
-                          const posB = first === duelA ? pS : pF;
+                          const posA = first === confA ? pF : pS;
+                          const posB = first === confA ? pS : pF;
                           return { posA, posB, c, pct: c / mcN * 100 };
                         }).sort((a, b) => b.c - a.c);
                       }
@@ -3023,19 +3023,19 @@ export default function WC2026() {
                             <div style={{ marginLeft: '12px', padding: '6px 10px 8px', background: `${card}aa`, borderLeft: `2px solid ${acc}`, marginTop: '3px', marginBottom: '6px', borderRadius: '0 4px 4px 0' }}>
                               <div style={{ fontSize: '9px', color: dm, marginBottom: '4px' }}>Cenários de qualificação ({breakdown.length}) que levam a este encontro:</div>
                               <div style={{ display: 'grid', gridTemplateColumns: '12px 60px 1fr 60px 12px', gap: '4px', fontSize: '8px', color: dm, marginBottom: '2px', fontWeight: 600 }}>
-                                <span></span><span>{nm(duelA)}</span><span></span><span style={{ textAlign: 'right' }}>{nm(duelB)}</span><span></span>
+                                <span></span><span>{nm(confA)}</span><span></span><span style={{ textAlign: 'right' }}>{nm(confB)}</span><span></span>
                               </div>
                               {breakdown.slice(0, 20).map((b, i) => {
                                 const wPct = pct > 0 ? (b.pct / pct) * 100 : 0;
                                 const barBd = maxBd > 0 ? (b.pct / maxBd) * 100 : 0;
                                 return (
                                   <div key={i} style={{ display: 'grid', gridTemplateColumns: '12px 60px 1fr 60px 60px', gap: '4px', alignItems: 'center', fontSize: '10px', padding: '2px 0' }}>
-                                    <span>{fl(duelA)}</span>
+                                    <span>{fl(confA)}</span>
                                     <span style={{ color: tx, fontWeight: 600, fontFamily: 'monospace' }}>{posLabel(b.posA)}</span>
                                     <div style={{ background: `${bd}33`, borderRadius: '2px', height: '8px', overflow: 'hidden' }}>
                                       <div style={{ background: acc, height: '100%', width: `${barBd}%`, opacity: 0.7 }}/>
                                     </div>
-                                    <span style={{ color: tx, fontWeight: 600, fontFamily: 'monospace', textAlign: 'right' }}>{posLabel(b.posB)} {fl(duelB)}</span>
+                                    <span style={{ color: tx, fontWeight: 600, fontFamily: 'monospace', textAlign: 'right' }}>{posLabel(b.posB)} {fl(confB)}</span>
                                     <span style={{ textAlign: 'right' }}>
                                       <span style={{ color: acc, fontWeight: 600 }}>{b.pct.toFixed(2)}%</span>
                                       <span style={{ color: dm, fontSize: '8px' }}> ({wPct.toFixed(0)}%)</span>
@@ -3251,8 +3251,7 @@ export default function WC2026() {
               })()
             )}
 
-            {muView === 'confronto' && (() => {
-              const teamsAll = Object.values(groups).flat().sort((x, y) => nm(x).localeCompare(nm(y)));
+            {muView === 'duel' && confA !== confB && (() => {
               const a = rtBase(confA), b = rtBase(confB);
               const { la, lb } = cL(a, b, matchTilt(confA, confB));
               // disputa de pênaltis: conversão base 75%, leve vantagem ao favorito pela diferença de Elo
@@ -3290,18 +3289,11 @@ export default function WC2026() {
               const penModeK = penTop.length ? penTop[0][0] : '4-3';
               const [pkMi, pkMj] = penModeK.split('-').map(Number);
               const penWinner = pen.winA >= .5 ? confA : confB; const penWinPct = pen.winA >= .5 ? pen.winA : 1 - pen.winA;
-              const SEL = { padding: '5px 8px', background: '#0d111d', color: tx, border: `1px solid ${bd}`, borderRadius: '5px', fontSize: '13px', fontWeight: 600 };
               const moreBtn = (key, total, shown) => total > shown ? <button onClick={() => setConfExp(p => ({ ...p, [key]: !p[key] }))} style={{ marginTop: '4px', padding: '2px 8px', fontSize: '9px', fontWeight: 700, background: 'transparent', color: acc, border: `1px solid ${acc}55`, borderRadius: '4px', cursor: 'pointer' }}>{confExp[key] ? 'ver menos ▴' : `ver mais ${total - shown} ▾`}</button> : null;
               return (
-                <div>
-                  <div style={{ fontSize: '11px', color: dm, marginBottom: '10px' }}>Distribuição exata de resultados entre duas seleções (equivale a infinitas simulações), com as configurações atuais de rating, tilts e favoritismo. Sem vantagem de mando (jogo neutro).</div>
-                  <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginBottom: '12px', flexWrap: 'wrap' }}>
-                    <select value={confA} onChange={e => setConfA(e.target.value)} style={SEL}>{teamsAll.map(t => <option key={t} value={t}>{fl(t)} {nm(t)}</option>)}</select>
-                    <span style={{ color: dm, fontWeight: 700 }}>×</span>
-                    <select value={confB} onChange={e => setConfB(e.target.value)} style={SEL}>{teamsAll.map(t => <option key={t} value={t}>{fl(t)} {nm(t)}</option>)}</select>
-                    <button onClick={() => setConfKO(v => !v)} style={{ padding: '5px 10px', fontSize: '11px', fontWeight: 700, background: confKO ? `${acc}33` : card, color: confKO ? acc : dm, border: `1px solid ${confKO ? acc : bd}`, borderRadius: '5px', cursor: 'pointer' }}>{confKO ? '🥊 Mata-mata' : '⚽ Jogo normal'}</button>
-                    <span style={{ fontSize: '9px', color: dm }}>ΔElo {a - b >= 0 ? '+' : ''}{a - b}</span>
-                  </div>
+                <div style={{ marginTop: '16px' }}>
+                  <div style={{ fontSize: '12px', fontWeight: 700, color: acc, marginBottom: '2px' }}>📊 Análise do confronto {confKO ? '(mata-mata)' : '(jogo normal)'}</div>
+                  <div style={{ fontSize: '11px', color: dm, marginBottom: '10px' }}>Distribuição exata de resultados entre as duas seleções (equivale a infinitas simulações), com as configurações atuais de rating, tilts e favoritismo. Sem vantagem de mando (jogo neutro).</div>
                   {confA === confB ? <div style={{ color: dm, padding: '20px' }}>Escolha duas seleções diferentes.</div> : <>
                     <div style={{ display: 'flex', gap: '8px', marginBottom: '12px' }}>
                       <div style={{ flex: 1, background: `${acc}11`, border: `1px solid ${acc}55`, borderRadius: '6px', padding: '10px', textAlign: 'center' }}>
@@ -3736,10 +3728,18 @@ export default function WC2026() {
             {resView === 'games' && (() => {
               const byDate = {};
               GS.forEach(([gn, hi, ai, date, city], idx) => {
+                if (resGrp !== 'all' && gn !== resGrp) return; // filtro por grupo
                 if (!byDate[date]) byDate[date] = [];
                 byDate[date].push({ idx, gn, home: groups[gn][hi], away: groups[gn][ai], date, city, brt: GS_BRT[idx] });
               });
-              return Object.entries(byDate).map(([date, ms]) => {
+              const filterRow = (
+                <div key="__filter" style={{ display: 'flex', gap: '3px', alignItems: 'center', marginBottom: '10px', flexWrap: 'wrap' }}>
+                  <span style={{ fontSize: '10px', color: dm }}>Grupo:</span>
+                  <SB active={resGrp === 'all'} onClick={() => setResGrp('all')}>Todos</SB>
+                  {Object.keys(groups).map(g => <SB key={g} active={resGrp === g} onClick={() => setResGrp(g)}>{g}</SB>)}
+                </div>
+              );
+              return [filterRow, ...Object.entries(byDate).map(([date, ms]) => {
                 ms.sort((a, b) => a.brt.localeCompare(b.brt));
                 return (
                 <div key={date} style={{ marginBottom: '12px' }}>
@@ -3967,7 +3967,7 @@ export default function WC2026() {
                     );
                   })}
                 </div>
-              ); })
+              ); })];
             })()}
           </div>
         )}
