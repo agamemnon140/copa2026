@@ -95,6 +95,21 @@ const fail = (name, detail) => { results.push({ s: '❌', name, detail }); conso
   const pcs = t.match(/→\s*([\d.<]+)%\s*de terminar 2–0/);
   if (pcs) ok('Placar de interesse 2×0 → probabilidade exibida', pcs[1] + '%'); else fail('Placar de interesse válido', t.match(/Placar de interesse[\s\S]{0,80}/)?.[0]);
 
+  // gráfico SEM eventos (curva "se continuar assim") + 4ª linha do placar de interesse
+  const nPaths0 = await card.locator('svg path').count();
+  const svgTxt = await card.locator('svg').textContent();
+  if (nPaths0 >= 4 && svgTxt.includes('P(2–0)')) ok('Gráfico abre sem eventos e inclui a linha do placar de interesse P(2–0)', nPaths0 + ' paths');
+  else fail('Gráfico baseline/target', `${nPaths0} paths; legenda: ${svgTxt.slice(0, 80)}`);
+  // hover: crosshair + tooltip com as chances no minuto
+  const svgBox = await card.locator('svg').boundingBox();
+  await page.mouse.move(svgBox.x + svgBox.width * 0.5, svgBox.y + svgBox.height * 0.5);
+  await page.waitForTimeout(150);
+  const nCirc = await card.locator('svg circle').count();
+  const svgTxt2 = await card.locator('svg').textContent();
+  if (nCirc >= 4 && /: [\d.]+%/.test(svgTxt2)) ok('Hover no gráfico → crosshair e tooltip com as chances do minuto', svgTxt2.match(/\d+'?[^%]*%/)?.[0]);
+  else fail('Hover do gráfico', `${nCirc} circles`);
+  await page.mouse.move(svgBox.x - 20, svgBox.y - 20); // sai do gráfico
+
   // volta para 0' e tira o gol, p/ screenshot limpo
   await card.locator('button', { hasText: /^0'$/ }).first().click();
   await page.screenshot({ path: path.join(SHOTS, '1-live-card.png'), fullPage: false });
@@ -124,12 +139,12 @@ const fail = (name, detail) => { results.push({ s: '❌', name, detail }); conso
   const nEv = (await liveTxt()).match(/[⚽🟥] \d+'/g)?.length || 0;
   if (nEv >= 2) probe('Segundo evento (🟥 60\') adicionado', nEv + ' chips'); else fail('Segundo evento', nEv + ' chips');
   await page.screenshot({ path: path.join(SHOTS, '1b-live-chart.png') });
-  // remove tudo → gráfico some e inputs voltam
+  // remove tudo → gráfico continua (curva baseline) e inputs voltam
   await card.locator('text=limpar').click();
   await page.waitForTimeout(200);
   const nPaths2 = await card.locator('svg path').count();
   const golsEnabled = !(await card.locator('input[type=number]').nth(4).isDisabled());
-  if (nPaths2 === 0 && golsEnabled) probe('"limpar" remove eventos → gráfico some, inputs reabilitados');
+  if (nPaths2 >= 3 && golsEnabled) probe('"limpar" remove eventos → gráfico permanece (baseline), inputs reabilitados');
   else fail('Limpeza de eventos', `${nPaths2} paths, enabled=${golsEnabled}`);
 
   /* ───── A3. H2H no card GS ───── */

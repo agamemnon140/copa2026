@@ -34,7 +34,7 @@ const code = [
   grab('const koAdvProb = (a, b, tA, tB)', 'r90, ret, pen };\n};'),
   grab('const liveProbs = (a, b, tA, tB,', 'scores, pOf };\n};'),
   grab('const evState = (ev, tau)', 'return st;\n};'),
-  grab('const liveSeriesCalc = (eH, eA, tA, tB, ev, s1, s2)', 'return out;\n};'),
+  grab('const liveSeriesCalc = (eH, eA, tA, tB, ev, s1, s2,', 'return out;\n};'),
   // bloco WCH gerado (WCH_TEAMS/WCH_ST/WCH) + wcH2H
   src.slice(src.indexOf('// === WCH:BEGIN'), src.indexOf('// === WCH:END ===')),
   grab('const wcH2H = (a, b)', 'return out;\n};'),
@@ -149,6 +149,15 @@ const at = tau => SER.find(p => p.tau === tau);
 chk('liveSeriesCalc: gol do A aos 23 → pH salta', at(23).pH > at(22.99).pH + 5, `${at(22.99).pH.toFixed(1)} → ${at(23).pH.toFixed(1)}`);
 chk('liveSeriesCalc: gol do B aos 75 → pA salta', at(75).pA > at(74.99).pA + 5, `${at(74.99).pA.toFixed(1)} → ${at(75).pA.toFixed(1)}`);
 chk('liveSeriesCalc: cobre 0..fim', SER[0].tau === 0 && SER[SER.length - 1].tau === 99);
+// sem eventos: usa `base` constante ("se o jogo continuar assim")
+const SER0 = liveSeriesCalc(1800, 1700, '', '', [], 3, 6);
+const SER10 = liveSeriesCalc(1800, 1700, '', '', [], 3, 6, { gA: 1, gB: 0, redsA: 0, redsB: 0 });
+chk('liveSeriesCalc: base 1×0 → pH(0) maior que baseline 0×0', SER10[0].pH > SER0[0].pH + 5, `${SER0[0].pH.toFixed(1)} vs ${SER10[0].pH.toFixed(1)}`);
+// target: pT presente, em [0,100], e zera quando o placar-alvo fica impossível
+const SERT = liveSeriesCalc(1800, 1700, '', '', EV, 3, 6, undefined, { a: 0, b: 0 });
+chk('liveSeriesCalc: pT presente com target', SERT.every(p => p.pT != null && p.pT >= 0 && p.pT <= 100));
+const atT = tau => SERT.find(p => p.tau === tau);
+chk('liveSeriesCalc: target 0–0 impossível após gol aos 23 → pT = 0', atT(22.99).pT > 0 && atT(23).pT === 0, `${atT(22.99).pT.toFixed(1)} → ${atT(23).pT}`);
 
 console.log(fail === 0 ? '\nTODOS OS TESTES PASSARAM' : `\n${fail} TESTE(S) FALHARAM`);
 process.exit(fail ? 1 : 0);

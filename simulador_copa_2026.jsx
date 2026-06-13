@@ -295,8 +295,11 @@ const evState = (ev, tau) => {
 };
 // Série da evolução de P(V/E/D) ao longo do jogo: τ inteiros + pares m−0.01/m em
 // cada evento (degrau vertical limpo no gráfico).
-const liveSeriesCalc = (eH, eA, tA, tB, ev, s1, s2) => {
+// Sem eventos, usa `base` (placar/vermelhos manuais) como estado CONSTANTE — a curva
+// "se o jogo continuar assim". `target` ({a,b}) adiciona pT = P(terminar a–b | estado em τ).
+const liveSeriesCalc = (eH, eA, tA, tB, ev, s1, s2, base = { gA: 0, gB: 0, redsA: 0, redsB: 0 }, target = null) => {
   const total = 90 + s1 + s2;
+  const hasEv = (ev || []).length > 0;
   const taus = [];
   for (let t = 0; t <= total; t++) taus.push(t);
   for (const e of ev || []) if (e.m >= 0 && e.m <= total) { taus.push(Math.max(0, e.m - 0.01)); taus.push(e.m); }
@@ -306,8 +309,11 @@ const liveSeriesCalc = (eH, eA, tA, tB, ev, s1, s2) => {
   for (const tau of taus) {
     if (tau === prev) continue;
     prev = tau;
-    const p = liveProbs(eH, eA, tA, tB, { tau, ...evState(ev, tau), s1, s2 });
-    out.push({ tau, pH: p.pH, pD: p.pD, pA: p.pA });
+    const st = hasEv ? evState(ev, tau) : base;
+    const p = liveProbs(eH, eA, tA, tB, { tau, ...st, s1, s2 });
+    const pt = { tau, pH: p.pH, pD: p.pD, pA: p.pA };
+    if (target) pt.pT = p.pOf(target.a, target.b) * 100;
+    out.push(pt);
   }
   return out;
 };
@@ -1199,20 +1205,24 @@ export default function WC2026() {
     return { type: 'gs', gn, q, n: IMPACT_N, movers, headline: movers[0] };
   };
 
-  // Série do gráfico de evolução ao vivo — memoizada pelos CAMPOS dos eventos/acréscimos:
-  // arrastar o slider (tau) NÃO recalcula a série, só a linha vertical re-renderiza.
+  // Série do gráfico de evolução ao vivo — memoizada pelos CAMPOS dos eventos/placar/acréscimos:
+  // arrastar o slider (tau) ou o hover NÃO recalculam a série.
   const liC = liveCard != null ? liveInputs[liveCard] : null;
+  const [chartHover, setChartHover] = useState(null); // τ sob o mouse no gráfico (quantizado por minuto)
   const liveChart = useMemo(() => {
-    if (liveCard == null || !liC?.ev?.length) return null;
+    if (liveCard == null) return null;
     _rSys = rSys; _customElo = customElo; _ME = customME; _useTilt = useTilt; _fav = favWeight; _spread = spread; _injM = injuries; _hb = homeAdv;
     const [gn, hi, ai, , city] = GS[liveCard];
     const home = groups[gn][hi], away = groups[gn][ai];
     const im = injuries[liveCard] || {};
     const eH = efCity(home, city) - (im.h || 0) * INJ_ELO;
     const eA = efCity(away, city) - (im.a || 0) * INJ_ELO;
-    const s1 = Math.max(0, Math.min(15, +liC.s1 || 0)), s2 = Math.max(0, Math.min(15, +liC.s2 || 0));
-    return liveSeriesCalc(eH, eA, home, away, liC.ev, s1, s2);
-  }, [liveCard, liC?.ev, liC?.s1, liC?.s2, injuries, groups, rSys, customElo, customME, useTilt, favWeight, spread, homeAdv]);
+    const cS1 = Math.max(0, Math.min(15, liC?.s1 == null ? 3 : +liC.s1 || 0));
+    const cS2 = Math.max(0, Math.min(15, liC?.s2 == null ? 6 : +liC.s2 || 0));
+    const base = { gA: +liC?.gA || 0, gB: +liC?.gB || 0, redsA: +liC?.redsA || 0, redsB: +liC?.redsB || 0 };
+    const target = liC?.csA !== '' && liC?.csA != null && liC?.csB !== '' && liC?.csB != null ? { a: +liC.csA, b: +liC.csB } : null;
+    return liveSeriesCalc(eH, eA, home, away, liC?.ev || [], cS1, cS2, base, target);
+  }, [liveCard, liC?.ev, liC?.s1, liC?.s2, liC?.gA, liC?.gB, liC?.redsA, liC?.redsB, liC?.csA, liC?.csB, injuries, groups, rSys, customElo, customME, useTilt, favWeight, spread, homeAdv]);
 
   // Cenário modal/mediano de um grupo: cada um dos 6 jogos termina no placar
   // moda/mediana (resultados preenchidos e lesões respeitados); a tabela deriva
@@ -3936,19 +3946,25 @@ export default function WC2026() {
                                 })()}
                               </div>
                             </div>
-                            {/* Gráfico da evolução de P(V/E/D) — aparece quando há eventos minutados */}
-                            {hasEv && liveChart && (() => {
+                            {/* Gráfico da evolução de P(V/E/D) ao longo do jogo */}
+                            {liveChart && (() => {
                               const W = 800, H = 240, PAD = { l: 38, r: 14, t: 14, b: 26 };
                               const total = 90 + liS1 + liS2;
                               const xS = t2 => PAD.l + (t2 / total) * (W - PAD.l - PAD.r);
                               const yS = p2 => PAD.t + (1 - p2 / 100) * (H - PAD.t - PAD.b);
+                              const hasT = liveChart[0].pT != null;
                               const mkPath = key => liveChart.map((p2, i) => (i === 0 ? 'M' : 'L') + xS(p2.tau).toFixed(1) + ',' + yS(p2[key]).toFixed(1)).join(' ');
                               const last = liveChart[liveChart.length - 1];
-                              const series = [['pH', gn, 'V ' + nm(m.home).slice(0, 3).toUpperCase()], ['pD', dm, 'E'], ['pA', bl, 'V ' + nm(m.away).slice(0, 3).toUpperCase()]];
+                              const series = [['pH', gn, 'V ' + nm(m.home).slice(0, 3).toUpperCase()], ['pD', dm, 'E'], ['pA', bl, 'V ' + nm(m.away).slice(0, 3).toUpperCase()], ...(hasT ? [['pT', acc, `P(${+li.csA}–${+li.csB})`]] : [])];
+                              const hov = chartHover != null ? liveChart.reduce((best, p2) => Math.abs(p2.tau - chartHover) < Math.abs(best.tau - chartHover) ? p2 : best) : null;
+                              const tipX = hov ? Math.min(xS(hov.tau) + 8, W - 118) : 0;
                               return (
                                 <div style={{ marginBottom: '6px' }}>
-                                  <div style={{ fontSize: '8px', color: dm, marginBottom: '2px' }}>Evolução da probabilidade durante o jogo (com os eventos informados)</div>
-                                  <svg viewBox={`0 0 ${W} ${H}`} style={{ width: '100%', height: 'auto', display: 'block', background: card, borderRadius: '4px', border: `1px solid ${bd}` }}>
+                                  <div style={{ fontSize: '8px', color: dm, marginBottom: '2px' }}>Evolução da probabilidade durante o jogo {hasEv ? '(com os eventos informados)' : '(se o placar/vermelhos atuais se mantiverem)'} — passe o mouse para ver minuto a minuto</div>
+                                  <svg viewBox={`0 0 ${W} ${H}`}
+                                    onMouseMove={e2 => { const r2 = e2.currentTarget.getBoundingClientRect(); const t3 = Math.round(Math.max(0, Math.min(total, ((e2.clientX - r2.left) / r2.width * W - PAD.l) / (W - PAD.l - PAD.r) * total))); if (t3 !== chartHover) setChartHover(t3); }}
+                                    onMouseLeave={() => setChartHover(null)}
+                                    style={{ width: '100%', height: 'auto', display: 'block', background: card, borderRadius: '4px', border: `1px solid ${bd}`, cursor: 'crosshair' }}>
                                     {[0, 25, 50, 75, 100].map(g => (
                                       <g key={g}>
                                         <line x1={PAD.l} x2={W - PAD.r} y1={yS(g)} y2={yS(g)} stroke={bd} strokeWidth="0.5" />
@@ -3959,7 +3975,7 @@ export default function WC2026() {
                                       <text key={l2} x={xS(Math.min(t2, total))} y={H - PAD.b + 13} fontSize="9" fill={dm} textAnchor="middle">{l2}</text>
                                     ))}
                                     <line x1={xS(liTau)} x2={xS(liTau)} y1={PAD.t} y2={H - PAD.b} stroke={acc} strokeWidth="1" strokeDasharray="3,3" />
-                                    {series.map(([k, c]) => <path key={k} d={mkPath(k)} stroke={c} strokeWidth="2" fill="none" />)}
+                                    {series.map(([k, c]) => <path key={k} d={mkPath(k)} stroke={c} strokeWidth={k === 'pT' ? 1.5 : 2} strokeDasharray={k === 'pT' ? '5,3' : undefined} fill="none" />)}
                                     {series.map(([k, c], i) => <text key={k} x={W - PAD.r + 2 - 36} y={yS(last[k]) + (i === 1 ? 10 : 3)} fontSize="10" fill={c} fontWeight="700" textAnchor="start">{last[k].toFixed(0)}%</text>)}
                                     {li.ev.filter(e2 => e2.m <= total).map((e2, i) => (
                                       <text key={i} x={xS(e2.m)} y={H - PAD.b - 3} fontSize="11" textAnchor="middle" style={{ userSelect: 'none' }}>{e2.t === 'g' ? '⚽' : '🟥'}</text>
@@ -3970,6 +3986,17 @@ export default function WC2026() {
                                         <text x={PAD.l + 19 + i * 92} y={PAD.t + 4} fontSize="9" fill={c}>{l2}</text>
                                       </g>
                                     ))}
+                                    {hov && (
+                                      <g pointerEvents="none">
+                                        <line x1={xS(hov.tau)} x2={xS(hov.tau)} y1={PAD.t} y2={H - PAD.b} stroke={tx} strokeWidth="0.8" />
+                                        {series.map(([k, c]) => <circle key={'h' + k} cx={xS(hov.tau)} cy={yS(hov[k])} r="3" fill={c} />)}
+                                        <rect x={tipX} y={PAD.t + 8} width="110" height={14 + series.length * 12} rx="4" fill="#0a0e18" stroke={bd} opacity="0.95" />
+                                        <text x={tipX + 8} y={PAD.t + 21} fontSize="10" fill={acc} fontWeight="700">{fmtClock(hov.tau, liS1)}</text>
+                                        {series.map(([k, c, l2], i) => (
+                                          <text key={'tt' + k} x={tipX + 8} y={PAD.t + 33 + i * 12} fontSize="9" fill={c}>{l2}: {hov[k].toFixed(1)}%</text>
+                                        ))}
+                                      </g>
+                                    )}
                                   </svg>
                                 </div>
                               );
