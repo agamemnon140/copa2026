@@ -6,6 +6,7 @@ _build/node_modules/
 _build/app.jsx
 _build/bundle.js
 _build/shots/
+_build/wc_matches.csv
 
 # Artefatos transitórios de build na raiz (esbuild) — index.html é o build commitado
 /node_modules/
