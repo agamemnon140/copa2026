@@ -278,6 +278,13 @@ const fail = (name, detail) => { results.push({ s: '❌', name, detail }); conso
   resBody = await page.locator('body').innerText();
   const grpsAll = [...new Set([...resBody.matchAll(/[▶▼] Grupo ([A-L]) •/g)].map(x => x[1]))];
   if (grpsAll.length === 12) probe('Filtro "Todos" restaura os 12 grupos'); else fail('Filtro Todos', grpsAll.length + ' grupos');
+  // ordem cronológica dos dias (bug: 14/Jun vinha antes de 13/Jun)
+  const days = [...resBody.matchAll(/📆 [^\d]*(\d+)\/(Jun|Jul)/g)].map(x => ({ d: +x[1], m: x[2] }));
+  const keyOf = o => ({ Jun: 6, Jul: 7 }[o.m] || 0) * 100 + o.d;
+  const ordered = days.every((o, i) => i === 0 || keyOf(days[i - 1]) <= keyOf(o));
+  const i13 = days.findIndex(o => o.d === 13 && o.m === 'Jun'), i14 = days.findIndex(o => o.d === 14 && o.m === 'Jun');
+  if (ordered && i13 >= 0 && i14 > i13) ok('Seções de dia em ordem cronológica (13/Jun antes de 14/Jun)', days.slice(0, 6).map(o => o.d + '/' + o.m).join(' '));
+  else fail('Ordem dos dias', `13 em #${i13}, 14 em #${i14}; ` + days.map(o => o.d + '/' + o.m).join(' '));
 
   /* ───── C. Bracket clicável ───── */
   await page.click('text=📊 Probs');
@@ -384,6 +391,10 @@ const fail = (name, detail) => { results.push({ s: '❌', name, detail }); conso
   const row = body.match(/0\s*×\s*4|0–4|0 × 4/);
   if (row) ok('Resultado inputado (0×4) listado na aba Surpresas');
   else fail('Resultado 0×4 não encontrado na lista', body.slice(0, 400));
+  // painel de calibração (precisão do modelo vs acaso)
+  if (body.includes('Precisão do modelo vs acaso') && /Acerto do resultado/.test(body) && /Ganho sobre o acaso/.test(body) && /bits\/jogo/.test(body))
+    ok('Painel de calibração "modelo vs acaso" renderiza (acerto 1X2, surpresa média, ganho)');
+  else fail('Painel de calibração', body.match(/Precisão do modelo[\s\S]{0,120}/)?.[0] || 'ausente');
   if (body.includes('Calcular impactos') || body.includes('calcular')) fail('Botões antigos de impacto ainda presentes na aba Surpresas');
   else ok('Sem botões "Calcular impactos"/"calcular" — impactos automáticos');
   const nImps = (body.match(/⚡ /g) || []).length;

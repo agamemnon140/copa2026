@@ -23,6 +23,7 @@ const code = [
   grab('const LIVE_F2', ';'),
   grab('const liveRemFrac = (tau, s1, s2', 'return Math.max(0, (Z - W) / Z);\n};'),
   grab('const fmtClock = (tau, s1)', "`90+${Math.round(tau - 90 - s1)}'`;"),
+  grab('const dateKey = d =>', '(+day || 0); };'),
   grab('const mulberry32 = (a)', '/ 4294967296;\n};'),
   grab('const makeRnd = (seed, key)', '>>> 0);'),
   grab('const sP = (l, rnd', 'return 7; };'),
@@ -41,8 +42,8 @@ const code = [
   src.slice(src.indexOf('// === WCH:BEGIN'), src.indexOf('// === WCH:END ===')),
   grab('const wcH2H = (a, b)', 'return out;\n};'),
 ].join('\n');
-const { liveRemFrac, fmtClock, liveProbs, makeRnd, sP, cL, groupPosProbs, koAdvProb, evState, liveSeriesCalc, wcH2H, WCH, WCH_TEAMS, WCH_ST, surpriseOf, mProbs } =
-  eval(code + '\n;({ liveRemFrac, fmtClock, liveProbs, makeRnd, sP, cL, groupPosProbs, koAdvProb, evState, liveSeriesCalc, wcH2H, WCH, WCH_TEAMS, WCH_ST, surpriseOf, mProbs });');
+const { liveRemFrac, fmtClock, liveProbs, makeRnd, sP, cL, groupPosProbs, koAdvProb, evState, liveSeriesCalc, wcH2H, WCH, WCH_TEAMS, WCH_ST, surpriseOf, mProbs, dateKey } =
+  eval(code + '\n;({ liveRemFrac, fmtClock, liveProbs, makeRnd, sP, cL, groupPosProbs, koAdvProb, evState, liveSeriesCalc, wcH2H, WCH, WCH_TEAMS, WCH_ST, surpriseOf, mProbs, dateKey });');
 const FL_KEYS = new Set([...src.match(/const FL\s*=\s*\{([\s\S]*?)\};/)[1].matchAll(/'([^']+)'\s*:/g)].map(m2 => m2[1]));
 
 let fail = 0;
@@ -170,6 +171,13 @@ chk('surpriseOf: zebra → resultado surpreendente (bitsOut > 1)', surp.bitsOut 
 chk('surpriseOf: placar mais raro que o resultado (bitsExact > bitsOut)', surp.bitsExact > surp.bitsOut, `${surp.bitsExact.toFixed(1)} vs ${surp.bitsOut.toFixed(1)}`);
 const surpDraw = surpriseOf(1700, 1700, '', '', 1, 1); // jogo equilibrado, empate
 chk('surpriseOf: empate provável → resultado pouco surpreendente', surpDraw.bitsOut < 3, surpDraw.bitsOut.toFixed(2));
+
+// dateKey — ordenação cronológica das seções de data ("DD/Mon")
+chk('dateKey: 13/Jun < 14/Jun (bug do dia 14 antes do 13)', dateKey('13/Jun') < dateKey('14/Jun'));
+chk('dateKey: 30/Jun < 1/Jul (vira o mês)', dateKey('30/Jun') < dateKey('1/Jul'));
+chk('dateKey: 9/Jun < 19/Jun (dia numérico, não string)', dateKey('9/Jun') < dateKey('19/Jun'));
+const ds = ['14/Jun', '13/Jun', '1/Jul', '30/Jun', '9/Jun'].sort((a, b) => dateKey(a) - dateKey(b));
+chk('dateKey: ordena a lista certo', JSON.stringify(ds) === JSON.stringify(['9/Jun', '13/Jun', '14/Jun', '30/Jun', '1/Jul']), ds.join(' '));
 
 console.log(fail === 0 ? '\nTODOS OS TESTES PASSARAM' : `\n${fail} TESTE(S) FALHARAM`);
 process.exit(fail ? 1 : 0);

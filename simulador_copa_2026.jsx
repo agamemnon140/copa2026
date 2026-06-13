@@ -84,6 +84,8 @@ const isHome = (team, city) => { const c = CITY_COUNTRY[city]; return (team === 
 const nm = t => PT[t] || t;
 const fl = t => FL[t] || '🏳️';
 const DOW = d => { const [day, mon] = d.split('/'); const m = { Jun: 5, Jul: 6 }; const dt = new Date(2026, m[mon], +day); return ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'][dt.getDay()]; };
+// Chave cronológica de uma data "DD/Mon" (Jun/Jul) para ordenar seções por dia.
+const dateKey = d => { const [day, mon] = d.split('/'); return ({ Jun: 6, Jul: 7 }[mon] || 0) * 100 + (+day || 0); };
 // BRT offset by city (hours ahead of local to get BRT; BRT = UTC-3)
 const TZ = {'Cidade do México':0,'Guadalajara':0,'Monterrey':0,'Toronto':-1,'Vancouver':-2,'Los Angeles':-2,'São Francisco':-2,'Seattle':-2,'Dallas':0,'Houston':0,'Kansas City':0,'Atlanta':-1,'Miami':-1,'Nova York/NJ':-1,'Boston':-1,'Filadélfia':-1,'MetLife':-1};
 // BRT kickoff times (FIFA oficial, ordem por match number) — fase de grupos (1-72) e mata-mata (73-104)
@@ -2227,13 +2229,23 @@ export default function WC2026() {
 
             {muView === 'surpresas' && (() => {
               // Coleta todos os resultados preenchidos (GS + KO) com surpresa analítica pré-jogo.
+              // Acrescenta dados de calibração: acerto do 1X2 (resultado mais provável aconteceu?),
+              // prob. do favorito do modelo e acerto do placar exato (moda).
+              const calib = (eH, eA, h, a, gA, gB) => {
+                const s = surpriseOf(eH, eA, h, a, gA, gB);
+                const pr = mProbs(eH, eA, h, a);
+                const pTop = Math.max(pr.pH, pr.pD, pr.pA) / 100; // prob do desfecho mais provável (favorito)
+                const pAct = (gA > gB ? pr.pH : gA < gB ? pr.pA : pr.pD) / 100;
+                const ms = modeScore(eH, eA, h, a);
+                return { ...s, pTop, hit: pAct >= pTop - 1e-9, modeHit: ms.a === gA && ms.b === gB };
+              };
               const rows = [];
               GS.forEach(([g, hi, ai, date, city], idx) => {
                 const fx = userRes[idx];
                 if (fx?.gA == null || fx?.gB == null) return;
                 const h = groups[g][hi], a = groups[g][ai];
                 const _im = injuries[idx] || {};
-                const s = surpriseOf(efCity(h, city) - (_im.h || 0) * INJ_ELO, efCity(a, city) - (_im.a || 0) * INJ_ELO, h, a, fx.gA, fx.gB);
+                const s = calib(efCity(h, city) - (_im.h || 0) * INJ_ELO, efCity(a, city) - (_im.a || 0) * INJ_ELO, h, a, fx.gA, fx.gB);
                 rows.push({ key: String(idx), label: 'J' + (idx + 1), fase: 'Grupo ' + g, h, a, gA: fx.gA, gB: fx.gB, tie: false, ...s });
               });
               const stgS = resolveStandings(groups, userRes);
@@ -2243,9 +2255,18 @@ export default function WC2026() {
                 if (fx?.gA == null || fx?.gB == null) continue;
                 const m = koS[mn];
                 if (!m?.h || !m?.a) continue;
-                const s = surpriseOf(efCity(m.h, KO_CITY[mn]), efCity(m.a, KO_CITY[mn]), m.h, m.a, fx.gA, fx.gB);
+                const s = calib(efCity(m.h, KO_CITY[mn]), efCity(m.a, KO_CITY[mn]), m.h, m.a, fx.gA, fx.gB);
                 rows.push({ key: 'k' + mn, label: 'M' + mn, fase: m.l, h: m.h, a: m.a, gA: fx.gA, gB: fx.gB, tie: fx.gA === fx.gB, pw: fx.pw, ...s });
               }
+              // Calibração agregada do modelo vs acaso (chute uniforme 1X2 = log2(3) ≈ 1.585 bits).
+              const N = rows.length;
+              const avgOut = N ? rows.reduce((s, r) => s + r.bitsOut, 0) / N : 0; // surpresa média do resultado
+              const RAND = Math.log2(3);
+              const gainBits = RAND - avgOut; // >0 = melhor que o acaso
+              const skill = RAND > 0 ? gainBits / RAND * 100 : 0; // % de surpresa removida vs acaso
+              const hitN = rows.filter(r => r.hit).length, hitRate = N ? hitN / N * 100 : 0;
+              const expHit = N ? rows.reduce((s, r) => s + r.pTop, 0) / N * 100 : 0; // taxa de acerto esperada (calibração)
+              const modeN = rows.filter(r => r.modeHit).length;
               rows.forEach(r => {
                 r.imp = qualImpact(r.key);
                 r.mag = r.imp ? (r.imp.type === 'ko' ? r.imp.dW : Math.abs(r.imp.headline.dAdv)) : -1;
@@ -2258,6 +2279,29 @@ export default function WC2026() {
                   <div style={{ fontSize: '12px', fontWeight: 700, color: acc, marginBottom: '4px' }}>📰 Resultados inseridos — surpresa & impacto na classificação</div>
                   <div style={{ fontSize: '10px', color: dm, marginBottom: '8px', lineHeight: 1.5, maxWidth: '760px' }}><strong style={{ color: tx }}>Surpresa</strong> em bits (−log₂ P; cada +1 bit = metade da chance), em duas medidas: <strong style={{ color: acc }}>placar</strong> = quão improvável era aquele placar exato; <strong style={{ color: bl }}>resultado</strong> = quão improvável era o desfecho 1X2 (quem venceu/empatou — a "zebra"). <strong style={{ color: tx }}>Impacto</strong> = quanto o resultado moveu a chance de <em>classificação</em> dos times do grupo (mini-MC pareado só do grupo, sementes idênticas — sem ruído) ou, no mata-mata, a chance de <em>avanço</em> do vencedor (analítico). Sempre incondicional, ignora filtros.</div>
                   {rows.length === 0 ? <div style={{ padding: '30px', textAlign: 'center', color: dm, fontSize: '11px' }}>Nenhum resultado preenchido — preencha na aba 📝 Resultados.</div> : <>
+                    {/* Calibração: o modelo está acertando melhor que o acaso? */}
+                    <div style={{ marginBottom: '10px', padding: '8px 10px', background: card, borderRadius: '6px', border: `1px solid ${gainBits > 0 ? gn + '55' : bd}`, maxWidth: '760px' }}>
+                      <div style={{ fontSize: '11px', fontWeight: 700, color: gainBits > 0 ? gn : rd, marginBottom: '5px' }}>📏 Precisão do modelo vs acaso {N < 8 ? <span style={{ fontSize: '8px', color: dm, fontWeight: 400 }}>(amostra pequena: {N} jogo{N > 1 ? 's' : ''} — ainda ruidoso)</span> : <span style={{ fontSize: '8px', color: dm, fontWeight: 400 }}>({N} jogos)</span>}</div>
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(150px,1fr))', gap: '8px' }}>
+                        <div title="Em quantos % dos jogos o desfecho 1X2 mais provável do modelo realmente aconteceu. 'Esperado' = média da prob. do favorito do modelo — se baterem, o modelo está bem calibrado.">
+                          <div style={{ fontSize: '8px', color: dm }}>Acerto do resultado (1X2)</div>
+                          <div style={{ fontSize: '15px', fontWeight: 800, color: tx }}>{hitRate.toFixed(0)}% <span style={{ fontSize: '9px', color: dm, fontWeight: 400 }}>({hitN}/{N}) · esperado {expHit.toFixed(0)}%</span></div>
+                        </div>
+                        <div title="Surpresa média do modelo sobre o resultado ocorrido (−log₂ da prob. que o modelo deu). Menor = melhor. O acaso (chute uniforme V/E/D) tem 1,58 bits/jogo fixos.">
+                          <div style={{ fontSize: '8px', color: dm }}>Surpresa média (resultado)</div>
+                          <div style={{ fontSize: '15px', fontWeight: 800, color: avgOut < RAND ? gn : rd }}>{avgOut.toFixed(2)} <span style={{ fontSize: '9px', color: dm, fontWeight: 400 }}>bits/jogo · acaso 1,58</span></div>
+                        </div>
+                        <div title="Quanto da incerteza do chute aleatório o modelo eliminou: (1,58 − surpresa do modelo) / 1,58. Positivo = o modelo é informativo; 0% = igual ao acaso; negativo = pior que chutar.">
+                          <div style={{ fontSize: '8px', color: dm }}>Ganho sobre o acaso</div>
+                          <div style={{ fontSize: '15px', fontWeight: 800, color: gainBits > 0.02 ? gn : gainBits < -0.02 ? rd : dm }}>{gainBits > 0 ? '+' : ''}{gainBits.toFixed(2)} bits <span style={{ fontSize: '9px', color: dm, fontWeight: 400 }}>({skill > 0 ? '+' : ''}{skill.toFixed(0)}%)</span></div>
+                        </div>
+                        <div title="Em quantos jogos o placar exato mais provável do modelo (a moda) bateu certo. Difícil por natureza — placares têm muita variância.">
+                          <div style={{ fontSize: '8px', color: dm }}>Placar exato (moda)</div>
+                          <div style={{ fontSize: '15px', fontWeight: 800, color: tx }}>{modeN}/{N} <span style={{ fontSize: '9px', color: dm, fontWeight: 400 }}>jogos</span></div>
+                        </div>
+                      </div>
+                      <div style={{ fontSize: '8px', color: dm, marginTop: '6px', lineHeight: 1.4 }}>{gainBits > 0.02 ? `O modelo está ${skill.toFixed(0)}% melhor que chutar V/E/D no acaso` : gainBits < -0.02 ? 'O modelo está pior que o acaso nestes jogos (zebras concentradas ou poucos jogos)' : 'O modelo está empatado com o acaso aqui'} — referido ao desfecho 1X2 nos 90 min. Compara a prob. que o modelo deu (sem ver o resultado) com o que aconteceu.</div>
+                    </div>
                     <div style={{ display: 'flex', gap: '6px', alignItems: 'center', marginBottom: '8px', flexWrap: 'wrap' }}>
                       <SB active={surSort === 'bits'} onClick={() => setSurSort('bits')}>↓ Surpresa</SB>
                       <SB active={surSort === 'impact'} onClick={() => setSurSort('impact')}>↓ Impacto</SB>
@@ -3841,7 +3885,7 @@ export default function WC2026() {
                   {Object.keys(groups).map(g => <SB key={g} active={resGrp === g} onClick={() => setResGrp(g)}>{g}</SB>)}
                 </div>
               );
-              return [filterRow, ...Object.entries(byDate).map(([date, ms]) => {
+              return [filterRow, ...Object.entries(byDate).sort((a, b) => dateKey(a[0]) - dateKey(b[0])).map(([date, ms]) => {
                 ms.sort((a, b) => a.brt.localeCompare(b.brt));
                 return (
                 <div key={date} style={{ marginBottom: '12px' }}>
@@ -4236,7 +4280,7 @@ export default function WC2026() {
                 {(() => {
                   const byDate = {};
                   single.gm.forEach(m => { if (!byDate[m.date]) byDate[m.date] = []; byDate[m.date].push(m); });
-                  return Object.entries(byDate).map(([date, ms]) => {
+                  return Object.entries(byDate).sort((a, b) => dateKey(a[0]) - dateKey(b[0])).map(([date, ms]) => {
                     ms.sort((a, b) => a.brt.localeCompare(b.brt));
                     return (
                     <div key={date} style={{ marginBottom: '6px' }}>
