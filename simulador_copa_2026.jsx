@@ -286,6 +286,31 @@ const liveProbs = (a, b, tA, tB, { tau = 0, gA = 0, gB = 0, redsA = 0, redsB = 0
   const pOf = (sa, sb) => (dist[sa + '-' + sb] || 0) / t;
   return { pH: pH / t * 100, pD: pD / t * 100, pA: pA / t * 100, laR, lbR, expScoreA: gA + laR, expScoreB: gB + lbR, scores, pOf };
 };
+// Estado do jogo derivado dos eventos minutados (gols/vermelhos) até τ, inclusive.
+// ev: [{m, t:'g'|'r', s:'A'|'B'}], m na mesma linha do tempo do slider (0..90+s1+s2).
+const evState = (ev, tau) => {
+  const st = { gA: 0, gB: 0, redsA: 0, redsB: 0 };
+  for (const e of ev || []) if (e.m <= tau) st[(e.t === 'g' ? 'g' : 'reds') + e.s]++;
+  return st;
+};
+// Série da evolução de P(V/E/D) ao longo do jogo: τ inteiros + pares m−0.01/m em
+// cada evento (degrau vertical limpo no gráfico).
+const liveSeriesCalc = (eH, eA, tA, tB, ev, s1, s2) => {
+  const total = 90 + s1 + s2;
+  const taus = [];
+  for (let t = 0; t <= total; t++) taus.push(t);
+  for (const e of ev || []) if (e.m >= 0 && e.m <= total) { taus.push(Math.max(0, e.m - 0.01)); taus.push(e.m); }
+  taus.sort((a, b) => a - b);
+  const out = [];
+  let prev = -1;
+  for (const tau of taus) {
+    if (tau === prev) continue;
+    prev = tau;
+    const p = liveProbs(eH, eA, tA, tB, { tau, ...evState(ev, tau), s1, s2 });
+    out.push({ tau, pH: p.pH, pD: p.pD, pA: p.pA });
+  }
+  return out;
+};
 
 // Resolve classificação parcial baseada em resultados preenchidos + posições forçadas
 const resolveStandings = (groups, userRes, forcedPos = {}) => {
@@ -932,6 +957,31 @@ const reaggregate = (pool, all, groups, conditions = []) => {
 };
 
 // ============================================================================
+// === WCH:BEGIN (gerado por _build/gen_h2h.cjs — não editar à mão) ===
+// Confrontos de Copas do Mundo (masc., 1930-2022) entre os times do app.
+// Fonte: Fjelstul World Cup Database (CC-BY 4.0) — github.com/jfjelstul/worldcup
+// Formato: [ano, fase, home, away, golsH, golsA, p, replay?]; p = 0 | 1 (prorrogação) | 'X-Y' (pênaltis)
+const WCH_TEAMS = ['Algeria', 'Argentina', 'Australia', 'Austria', 'Belgium', 'Bolivia', 'Bosnia and Herzegovina', 'Brazil', 'Canada', 'Colombia', 'Croatia', 'Czechia', 'DR Congo', 'Denmark', 'Ecuador', 'Egypt', 'England', 'France', 'Germany', 'Ghana', 'Haiti', 'Iran', 'Iraq', 'Italy', 'Ivory Coast', 'Jamaica', 'Japan', 'Mexico', 'Morocco', 'Netherlands', 'New Zealand', 'Norway', 'Panama', 'Paraguay', 'Poland', 'Portugal', 'Qatar', 'Saudi Arabia', 'Scotland', 'Senegal', 'South Africa', 'South Korea', 'Spain', 'Sweden', 'Switzerland', 'Tunisia', 'Türkiye', 'USA', 'Uruguay'];
+const WCH_ST = { G: 'Grupos', G2: '2ª fase de grupos', R1: '1ª fase', R2: '2ª fase', FR: 'Rodada final', R16: 'Oitavas', QF: 'Quartas', SF: 'Semifinal', TP: '3º lugar', F: 'FINAL' };
+const WCH = [[1930,'G',17,27,4,1,0],[1930,'G',47,4,3,0,0],[1930,'G',1,17,1,0,0],[1930,'G',47,33,3,0,0],[1930,'G',1,27,6,3,0],[1930,'G',7,5,4,0,0],[1930,'G',33,4,1,0,0],[1930,'SF',1,47,6,1,0],[1930,'F',48,1,4,2,0],[1934,'R16',3,17,3,2,1],[1934,'R16',18,4,5,2,0],[1934,'R16',23,47,7,1,0],[1934,'R16',42,7,3,1,0],[1934,'R16',43,1,3,2,0],[1934,'R16',44,29,3,2,0],[1934,'QF',11,44,3,2,0],[1934,'QF',18,43,2,1,0],[1934,'QF',23,42,1,1,1],[1934,'QF',23,42,1,0,0,1],[1934,'SF',11,18,3,1,0],[1934,'SF',23,3,1,0,0],[1934,'TP',18,3,3,2,0],[1934,'F',23,11,2,1,1],[1938,'R16',44,18,1,1,1],[1938,'R16',17,4,3,1,0],[1938,'R16',23,31,2,1,1],[1938,'R16',7,34,6,5,1],[1938,'R16',11,29,3,0,1],[1938,'R16',44,18,4,2,0,1],[1938,'QF',7,11,1,1,1],[1938,'QF',23,17,3,1,0],[1938,'QF',7,11,2,1,0,1],[1938,'SF',23,7,2,1,0],[1938,'TP',7,43,4,2,0],[1950,'G',7,27,4,0,0],[1950,'G',42,47,3,1,0],[1950,'G',43,23,3,2,0],[1950,'G',7,44,2,2,0],[1950,'G',47,16,1,0,0],[1950,'G',43,33,2,2,0],[1950,'G',42,16,1,0,0],[1950,'G',23,33,2,0,0],[1950,'G',48,5,8,0,0],[1950,'G',44,27,2,1,0],[1950,'FR',7,43,7,1,0],[1950,'FR',48,42,2,2,0],[1950,'FR',7,42,6,1,0],[1950,'FR',48,43,3,2,0],[1950,'FR',43,42,3,1,0],[1950,'FR',48,7,2,1,0],[1954,'G',7,27,5,0,0],[1954,'G',3,38,1,0,0],[1954,'G',48,11,2,0,0],[1954,'G',44,23,2,1,0],[1954,'G',18,46,4,1,0],[1954,'G',16,4,4,4,1],[1954,'G',48,38,7,0,0],[1954,'G',3,11,5,0,0],[1954,'G',17,27,3,2,0],[1954,'G',46,41,7,0,0],[1954,'G',23,4,4,1,0],[1954,'G',16,44,2,0,0],[1954,'G',18,46,7,2,0],[1954,'G',44,23,4,1,0],[1954,'QF',3,44,7,5,0],[1954,'QF',48,16,4,2,0],[1954,'SF',18,3,6,1,0],[1954,'TP',3,48,3,1,0],[1958,'G',43,27,3,0,0],[1958,'G',1,18,1,3,0],[1958,'G',17,33,7,3,0],[1958,'G',7,3,3,0,0],[1958,'G',18,11,2,2,0],[1958,'G',33,38,3,2,0],[1958,'G',7,16,0,0,0],[1958,'G',11,1,6,1,0],[1958,'G',17,38,2,1,0],[1958,'G',16,3,2,2,0],[1958,'SF',7,17,5,2,0],[1958,'SF',43,18,3,1,0],[1958,'TP',17,18,6,3,0],[1958,'F',7,43,5,2,0],[1962,'G',48,9,2,1,0],[1962,'G',7,27,2,0,0],[1962,'G',18,23,0,0,0],[1962,'G',11,42,1,0,0],[1962,'G',7,11,0,0,0],[1962,'G',16,1,3,1,0],[1962,'G',18,44,2,1,0],[1962,'G',42,27,1,0,0],[1962,'G',7,42,2,1,0],[1962,'G',23,44,3,0,0],[1962,'G',27,11,3,1,0],[1962,'QF',7,16,3,1,0],[1962,'F',7,11,3,1,0],[1966,'G',16,48,0,0,0],[1966,'G',18,44,5,0,0],[1966,'G',17,27,1,1,0],[1966,'G',1,42,2,1,0],[1966,'G',48,17,2,1,0],[1966,'G',42,44,2,1,0],[1966,'G',1,18,0,0,0],[1966,'G',16,27,2,0,0],[1966,'G',27,48,0,0,0],[1966,'G',1,44,2,0,0],[1966,'G',35,7,3,1,0],[1966,'G',16,17,2,0,0],[1966,'G',18,42,2,1,0],[1966,'QF',16,1,1,0,0],[1966,'QF',18,48,4,0,0],[1966,'SF',16,35,2,1,0],[1966,'F',16,18,4,2,1],[1970,'G',23,43,1,0,0],[1970,'G',7,11,4,1,0],[1970,'G',18,28,2,1,0],[1970,'G',48,23,0,0,0],[1970,'G',7,16,1,0,0],[1970,'G',43,48,1,0,0],[1970,'G',27,4,1,0,0],[1970,'G',16,11,1,0,0],[1970,'QF',23,27,4,1,0],[1970,'QF',18,16,3,2,1],[1970,'SF',7,48,3,1,0],[1970,'SF',23,18,4,3,1],[1970,'TP',18,48,1,0,0],[1970,'F',7,23,4,1,0],[1974,'G',12,38,0,2,0],[1974,'G',48,29,0,2,0],[1974,'G',23,20,3,1,0],[1974,'G',34,1,3,2,0],[1974,'G',2,18,0,3,0],[1974,'G',38,7,0,0,0],[1974,'G',29,43,0,0,0],[1974,'G',1,23,1,1,0],[1974,'G',20,34,0,7,0],[1974,'G',12,7,0,3,0],[1974,'G',43,48,3,0,0],[1974,'G',1,20,4,1,0],[1974,'G',34,23,2,1,0],[1974,'G2',29,1,4,0,0],[1974,'G2',43,34,0,1,0],[1974,'G2',1,7,1,2,0],[1974,'G2',18,43,4,2,0],[1974,'G2',34,18,0,1,0],[1974,'G2',29,7,2,0,0],[1974,'TP',7,34,0,1,0],[1974,'F',29,18,1,2,0],[1978,'G',18,34,0,0,0],[1978,'G',23,17,2,1,0],[1978,'G',45,27,3,1,0],[1978,'G',3,42,2,1,0],[1978,'G',7,43,1,1,0],[1978,'G',29,21,3,0,0],[1978,'G',34,45,1,0,0],[1978,'G',18,27,6,0,0],[1978,'G',1,17,2,1,0],[1978,'G',3,43,1,0,0],[1978,'G',7,42,0,0,0],[1978,'G',38,21,1,1,0],[1978,'G',34,27,3,1,0],[1978,'G',18,45,0,0,0],[1978,'G',1,23,0,1,0],[1978,'G',7,3,1,0,0],[1978,'G',42,43,1,0,0],[1978,'G',38,29,3,2,0],[1978,'G2',3,29,1,5,0],[1978,'G2',23,18,0,0,0],[1978,'G2',1,34,2,0,0],[1978,'G2',23,3,1,0,0],[1978,'G2',29,18,2,2,0],[1978,'G2',1,7,0,0,0],[1978,'G2',3,18,3,2,0],[1978,'G2',23,29,1,2,0],[1978,'G2',7,34,3,1,0],[1978,'TP',7,23,2,1,0],[1978,'F',1,29,3,1,1],[1982,'G',1,4,0,1,0],[1982,'G',23,34,0,0,0],[1982,'G',38,30,5,2,0],[1982,'G',18,0,1,2,0],[1982,'G',16,17,3,1,0],[1982,'G',7,38,4,1,0],[1982,'G',16,11,2,0,0],[1982,'G',0,3,0,2,0],[1982,'G',7,30,4,0,0],[1982,'G',17,11,1,1,0],[1982,'G',18,3,1,0,0],[1982,'G2',3,17,0,1,0],[1982,'G2',34,4,3,0,0],[1982,'G2',23,1,2,1,0],[1982,'G2',18,16,0,0,0],[1982,'G2',1,7,1,3,0],[1982,'G2',18,42,2,1,0],[1982,'G2',23,7,3,2,0],[1982,'G2',42,16,0,0,0],[1982,'SF',34,23,0,2,0],[1982,'SF',18,17,3,3,'5-4'],[1982,'TP',34,17,3,2,0],[1982,'F',23,18,3,1,0],[1986,'G',42,7,0,1,0],[1986,'G',8,17,0,1,0],[1986,'G',1,41,3,1,0],[1986,'G',28,34,0,0,0],[1986,'G',4,27,1,2,0],[1986,'G',35,16,1,0,0],[1986,'G',33,22,1,0,0],[1986,'G',48,18,1,1,0],[1986,'G',38,13,0,1,0],[1986,'G',23,1,1,1,0],[1986,'G',7,0,1,0,0],[1986,'G',16,28,0,0,0],[1986,'G',27,33,1,1,0],[1986,'G',34,35,1,0,0],[1986,'G',22,4,1,2,0],[1986,'G',18,38,2,1,0],[1986,'G',13,48,6,1,0],[1986,'G',41,23,2,3,0],[1986,'G',22,27,0,1,0],[1986,'G',33,4,2,2,0],[1986,'G',16,34,3,0,0],[1986,'G',35,28,1,3,0],[1986,'G',0,42,0,3,0],[1986,'G',13,18,2,0,0],[1986,'G',38,48,0,0,0],[1986,'R16',7,34,4,0,0],[1986,'R16',1,48,1,0,0],[1986,'R16',23,17,0,2,0],[1986,'R16',28,18,0,1,0],[1986,'R16',16,33,3,0,0],[1986,'R16',13,42,1,5,0],[1986,'QF',7,17,1,1,'3-4'],[1986,'QF',18,27,0,0,'4-1'],[1986,'QF',1,16,2,1,0],[1986,'QF',42,4,1,1,'4-5'],[1986,'SF',17,18,0,2,0],[1986,'SF',1,4,2,0,0],[1986,'TP',4,17,2,4,1],[1986,'F',1,18,3,2,0],[1990,'G',23,3,1,0,0],[1990,'G',47,11,1,5,0],[1990,'G',7,43,2,1,0],[1990,'G',4,41,2,0,0],[1990,'G',29,15,1,1,0],[1990,'G',48,42,0,0,0],[1990,'G',23,47,1,0,0],[1990,'G',3,11,0,1,0],[1990,'G',43,38,1,2,0],[1990,'G',16,29,0,0,0],[1990,'G',4,48,3,1,0],[1990,'G',41,42,1,3,0],[1990,'G',18,9,1,1,0],[1990,'G',3,47,2,1,0],[1990,'G',23,11,2,0,0],[1990,'G',7,38,1,0,0],[1990,'G',4,42,1,2,0],[1990,'G',41,48,0,1,0],[1990,'G',16,15,1,0,0],[1990,'R16',7,1,0,1,0],[1990,'R16',18,29,2,1,0],[1990,'R16',23,48,2,0,0],[1990,'R16',16,4,1,0,1],[1990,'QF',11,18,0,1,0],[1990,'SF',1,23,1,1,'4-3'],[1990,'SF',18,16,1,1,'4-3'],[1990,'TP',23,16,2,1,0],[1990,'F',18,1,1,0,0],[1994,'G',18,5,1,0,0],[1994,'G',42,41,2,2,0],[1994,'G',47,44,1,1,0],[1994,'G',4,28,1,0,0],[1994,'G',31,27,1,0,0],[1994,'G',29,37,2,1,0],[1994,'G',18,42,1,1,0],[1994,'G',47,9,2,1,0],[1994,'G',23,31,1,0,0],[1994,'G',41,5,0,0,0],[1994,'G',4,29,1,0,0],[1994,'G',37,28,2,1,0],[1994,'G',44,9,0,2,0],[1994,'G',5,42,1,3,0],[1994,'G',18,41,3,2,0],[1994,'G',23,27,1,1,0],[1994,'G',7,43,1,1,0],[1994,'G',4,37,0,1,0],[1994,'G',28,29,1,2,0],[1994,'R16',18,4,3,2,0],[1994,'R16',42,44,3,0,0],[1994,'R16',37,43,1,3,0],[1994,'R16',7,47,1,0,0],[1994,'QF',23,42,2,1,0],[1994,'QF',29,7,2,3,0],[1994,'SF',43,7,0,1,0],[1994,'F',7,23,0,0,'3-2'],[1998,'G',7,38,2,1,0],[1998,'G',28,31,2,2,0],[1998,'G',37,13,0,1,0],[1998,'G',17,40,3,0,0],[1998,'G',41,27,1,3,0],[1998,'G',29,4,0,0,0],[1998,'G',1,26,1,0,0],[1998,'G',25,10,1,3,0],[1998,'G',16,45,2,0,0],[1998,'G',18,47,2,0,0],[1998,'G',38,31,1,1,0],[1998,'G',7,28,3,0,0],[1998,'G',40,13,1,1,0],[1998,'G',17,37,4,0,0],[1998,'G',42,33,0,0,0],[1998,'G',26,10,0,1,0],[1998,'G',4,27,2,2,0],[1998,'G',29,41,5,0,0],[1998,'G',1,25,5,0,0],[1998,'G',47,21,1,2,0],[1998,'G',9,45,1,0,0],[1998,'G',23,3,2,1,0],[1998,'G',7,31,1,2,0],[1998,'G',38,28,0,3,0],[1998,'G',17,13,2,1,0],[1998,'G',40,37,2,2,0],[1998,'G',4,41,1,1,0],[1998,'G',29,27,2,2,0],[1998,'G',18,21,2,0,0],[1998,'G',1,10,1,0,0],[1998,'G',26,25,1,2,0],[1998,'G',9,16,0,2,0],[1998,'R16',23,31,1,0,0],[1998,'R16',17,33,1,0,1],[1998,'R16',18,27,2,1,0],[1998,'R16',1,16,2,2,'4-3'],[1998,'QF',23,17,0,0,'3-4'],[1998,'QF',7,13,3,2,0],[1998,'QF',29,1,2,1,0],[1998,'QF',18,10,0,3,0],[1998,'SF',7,29,1,1,'4-2'],[1998,'SF',17,10,2,1,0],[1998,'TP',29,10,1,2,0],[1998,'F',7,17,0,3,0],[2002,'G',17,39,0,1,0],[2002,'G',48,13,1,2,0],[2002,'G',18,37,8,0,0],[2002,'G',33,40,2,2,0],[2002,'G',16,43,1,1,0],[2002,'G',10,27,0,1,0],[2002,'G',7,46,2,1,0],[2002,'G',23,14,2,0,0],[2002,'G',26,4,2,2,0],[2002,'G',41,34,2,0,0],[2002,'G',47,35,3,2,0],[2002,'G',13,39,1,1,0],[2002,'G',17,48,0,0,0],[2002,'G',42,33,3,1,0],[2002,'G',1,16,0,1,0],[2002,'G',23,10,1,2,0],[2002,'G',27,14,2,1,0],[2002,'G',41,47,1,1,0],[2002,'G',45,4,1,1,0],[2002,'G',35,34,4,0,0],[2002,'G',13,17,2,0,0],[2002,'G',39,48,3,3,0],[2002,'G',43,1,1,1,0],[2002,'G',40,42,2,3,0],[2002,'G',14,10,1,0,0],[2002,'G',27,23,1,1,0],[2002,'G',45,26,0,2,0],[2002,'G',34,47,3,1,0],[2002,'G',35,41,0,1,0],[2002,'R16',18,33,1,0,0],[2002,'R16',13,16,0,3,0],[2002,'R16',43,39,1,2,1],[2002,'R16',27,47,0,2,0],[2002,'R16',7,4,2,0,0],[2002,'R16',26,46,0,1,0],[2002,'R16',41,23,2,1,1],[2002,'QF',16,7,1,2,0],[2002,'QF',18,47,1,0,0],[2002,'QF',42,41,0,0,'3-5'],[2002,'QF',39,46,0,1,1],[2002,'SF',18,41,1,0,0],[2002,'SF',7,46,1,0,0],[2002,'TP',41,46,2,3,0],[2002,'F',18,7,0,2,0],[2006,'G',34,14,0,2,0],[2006,'G',16,33,1,0,0],[2006,'G',1,24,2,1,0],[2006,'G',27,21,3,1,0],[2006,'G',2,26,3,1,0],[2006,'G',47,11,0,3,0],[2006,'G',23,19,2,0,0],[2006,'G',17,44,0,0,0],[2006,'G',7,10,1,0,0],[2006,'G',45,37,2,2,0],[2006,'G',18,34,1,0,0],[2006,'G',43,33,1,0,0],[2006,'G',29,24,2,1,0],[2006,'G',35,21,2,0,0],[2006,'G',11,19,0,2,0],[2006,'G',23,47,1,1,0],[2006,'G',26,10,0,0,0],[2006,'G',7,2,2,0,0],[2006,'G',17,41,1,1,0],[2006,'G',42,45,3,1,0],[2006,'G',14,18,0,3,0],[2006,'G',43,16,2,2,0],[2006,'G',35,27,2,1,0],[2006,'G',29,1,0,0,0],[2006,'G',11,23,0,2,0],[2006,'G',19,47,2,1,0],[2006,'G',10,2,2,2,0],[2006,'G',26,7,1,4,0],[2006,'G',37,42,0,1,0],[2006,'G',44,41,2,0,0],[2006,'R16',18,43,2,0,0],[2006,'R16',1,27,2,1,1],[2006,'R16',16,14,1,0,0],[2006,'R16',35,29,1,0,0],[2006,'R16',23,2,1,0,0],[2006,'R16',7,19,3,0,0],[2006,'R16',42,17,1,3,0],[2006,'QF',18,1,1,1,'4-2'],[2006,'QF',16,35,0,0,'1-3'],[2006,'QF',7,17,0,1,0],[2006,'SF',18,23,0,2,1],[2006,'SF',35,17,0,1,0],[2006,'TP',18,35,3,1,0],[2006,'F',23,17,1,1,'5-3'],[2010,'G',40,27,1,1,0],[2010,'G',48,17,0,0,0],[2010,'G',16,47,1,1,0],[2010,'G',18,2,4,0,0],[2010,'G',29,13,2,0,0],[2010,'G',23,33,1,1,0],[2010,'G',24,35,0,0,0],[2010,'G',42,44,0,1,0],[2010,'G',40,48,0,3,0],[2010,'G',1,41,4,1,0],[2010,'G',17,27,0,2,0],[2010,'G',16,0,0,0,0],[2010,'G',29,26,1,0,0],[2010,'G',19,2,1,1,0],[2010,'G',23,30,1,1,0],[2010,'G',7,24,3,1,0],[2010,'G',17,40,1,2,0],[2010,'G',27,48,0,1,0],[2010,'G',47,0,1,0,0],[2010,'G',19,18,0,1,0],[2010,'G',33,30,0,0,0],[2010,'G',13,26,1,3,0],[2010,'G',35,7,0,0,0],[2010,'R16',48,41,2,1,0],[2010,'R16',47,19,1,2,1],[2010,'R16',18,16,4,1,0],[2010,'R16',1,27,3,1,0],[2010,'R16',33,26,0,0,'5-3'],[2010,'R16',42,35,1,0,0],[2010,'QF',29,7,2,1,0],[2010,'QF',48,19,1,1,'4-2'],[2010,'QF',1,18,0,4,0],[2010,'QF',33,42,0,1,0],[2010,'SF',48,29,2,3,0],[2010,'SF',18,42,0,1,0],[2010,'TP',48,18,2,3,0],[2010,'F',29,42,0,1,1],[2014,'G',7,10,3,1,0],[2014,'G',42,29,1,5,0],[2014,'G',16,23,1,2,0],[2014,'G',24,26,2,1,0],[2014,'G',44,14,2,1,0],[2014,'G',1,6,2,1,0],[2014,'G',18,35,4,0,0],[2014,'G',19,47,1,2,0],[2014,'G',4,0,2,1,0],[2014,'G',7,27,0,0,0],[2014,'G',2,29,2,3,0],[2014,'G',9,24,2,1,0],[2014,'G',48,16,2,1,0],[2014,'G',44,17,2,5,0],[2014,'G',1,21,1,0,0],[2014,'G',18,19,2,2,0],[2014,'G',41,0,2,4,0],[2014,'G',47,35,2,2,0],[2014,'G',2,42,0,3,0],[2014,'G',10,27,1,3,0],[2014,'G',23,48,0,1,0],[2014,'G',26,9,1,4,0],[2014,'G',6,21,3,1,0],[2014,'G',14,17,0,0,0],[2014,'G',35,19,2,1,0],[2014,'G',47,18,0,1,0],[2014,'G',41,4,0,1,0],[2014,'R16',9,48,2,0,0],[2014,'R16',29,27,2,1,0],[2014,'R16',18,0,2,1,1],[2014,'R16',1,44,1,0,1],[2014,'R16',4,47,2,1,1],[2014,'QF',17,18,0,1,0],[2014,'QF',7,9,2,1,0],[2014,'QF',1,4,1,0,0],[2014,'SF',7,18,1,7,0],[2014,'SF',29,1,0,0,'2-4'],[2014,'TP',7,29,0,3,0],[2014,'F',18,1,1,0,1],[2018,'G',15,48,0,1,0],[2018,'G',28,21,0,1,0],[2018,'G',35,42,3,3,0],[2018,'G',17,2,2,1,0],[2018,'G',18,27,0,1,0],[2018,'G',7,44,1,1,0],[2018,'G',43,41,1,0,0],[2018,'G',4,32,3,0,0],[2018,'G',45,16,1,2,0],[2018,'G',9,26,1,2,0],[2018,'G',34,39,1,2,0],[2018,'G',35,28,1,0,0],[2018,'G',48,37,1,0,0],[2018,'G',21,42,0,1,0],[2018,'G',13,2,1,1,0],[2018,'G',1,10,0,3,0],[2018,'G',4,45,5,2,0],[2018,'G',41,27,1,2,0],[2018,'G',18,43,2,1,0],[2018,'G',16,32,6,1,0],[2018,'G',26,39,2,2,0],[2018,'G',34,9,0,3,0],[2018,'G',37,15,2,1,0],[2018,'G',42,28,2,2,0],[2018,'G',21,35,1,1,0],[2018,'G',13,17,0,0,0],[2018,'G',41,18,2,0,0],[2018,'G',27,43,0,3,0],[2018,'G',26,34,0,1,0],[2018,'G',39,9,0,1,0],[2018,'G',16,4,0,1,0],[2018,'G',32,45,1,2,0],[2018,'R16',17,1,4,3,0],[2018,'R16',48,35,2,1,0],[2018,'R16',10,13,1,1,'3-2'],[2018,'R16',7,27,2,0,0],[2018,'R16',4,26,3,2,0],[2018,'R16',43,44,1,0,0],[2018,'R16',9,16,1,1,'3-4'],[2018,'QF',48,17,0,2,0],[2018,'QF',7,4,1,2,0],[2018,'QF',43,16,0,2,0],[2018,'SF',17,4,1,0,0],[2018,'SF',10,16,2,1,1],[2018,'TP',4,16,2,0,0],[2018,'F',17,10,4,2,0],[2022,'G',36,14,0,2,0],[2022,'G',16,21,6,2,0],[2022,'G',39,29,0,2,0],[2022,'G',1,37,1,2,0],[2022,'G',13,45,0,0,0],[2022,'G',27,34,0,0,0],[2022,'G',17,2,4,1,0],[2022,'G',28,10,0,0,0],[2022,'G',18,26,1,2,0],[2022,'G',4,8,1,0,0],[2022,'G',48,41,0,0,0],[2022,'G',35,19,3,2,0],[2022,'G',36,39,1,3,0],[2022,'G',29,14,1,1,0],[2022,'G',16,47,0,0,0],[2022,'G',45,2,0,1,0],[2022,'G',34,37,2,0,0],[2022,'G',17,13,2,1,0],[2022,'G',1,27,2,0,0],[2022,'G',4,28,0,2,0],[2022,'G',10,8,4,1,0],[2022,'G',42,18,1,1,0],[2022,'G',41,19,2,3,0],[2022,'G',7,44,1,0,0],[2022,'G',35,48,2,0,0],[2022,'G',14,39,1,2,0],[2022,'G',29,36,2,0,0],[2022,'G',21,47,0,1,0],[2022,'G',2,13,1,0,0],[2022,'G',45,17,1,0,0],[2022,'G',34,1,0,2,0],[2022,'G',37,27,1,2,0],[2022,'G',8,28,1,2,0],[2022,'G',10,4,0,0,0],[2022,'G',26,42,2,1,0],[2022,'G',19,48,0,2,0],[2022,'G',41,35,2,1,0],[2022,'R16',29,47,3,1,0],[2022,'R16',1,2,2,1,0],[2022,'R16',17,34,3,1,0],[2022,'R16',16,39,3,0,0],[2022,'R16',26,10,1,1,'1-3'],[2022,'R16',7,41,4,1,0],[2022,'R16',28,42,0,0,'3-0'],[2022,'R16',35,44,6,1,0],[2022,'QF',10,7,1,1,'4-2'],[2022,'QF',29,1,2,2,'3-4'],[2022,'QF',28,35,1,0,0],[2022,'QF',16,17,1,2,0],[2022,'SF',1,10,3,0,0],[2022,'SF',17,28,2,0,0],[2022,'TP',10,28,2,1,0],[2022,'F',1,17,3,3,'4-2']];
+// === WCH:END ===
+// Confrontos de Copas entre a e b: lista (ano desc) + retrospecto do ponto de vista de a.
+// Empate decidido nos pênaltis conta como EMPATE no retrospecto (o jogo terminou empatado).
+const wcH2H = (a, b) => {
+  const ia = WCH_TEAMS.indexOf(a), ib = WCH_TEAMS.indexOf(b);
+  const out = { matches: [], tally: { wA: 0, d: 0, wB: 0 } };
+  if (ia < 0 || ib < 0 || a === b) return out;
+  for (const r of WCH) {
+    const [y, st, h, aw, gh, ga, pen, rep] = r;
+    if (!((h === ia && aw === ib) || (h === ib && aw === ia))) continue;
+    out.matches.push({ y, st, h: WCH_TEAMS[h], a: WCH_TEAMS[aw], gh, ga, pen: pen || 0, rep: !!rep });
+    const gFor = h === ia ? gh : ga, gAg = h === ia ? ga : gh;
+    if (gFor > gAg) out.tally.wA++; else if (gFor < gAg) out.tally.wB++; else out.tally.d++;
+  }
+  out.matches.sort((x, y2) => y2.y - x.y);
+  return out;
+};
+
 // Persistência local (localStorage) — sobrevive a fechar/reabrir o navegador.
 // Seguro: se o storage não estiver disponível (ex.: preview), degrada sem quebrar.
 // ============================================================================
@@ -971,7 +1021,9 @@ export default function WC2026() {
   const [duelPosData, setDuelPosData] = useState(null);
   const [duelExpand, setDuelExpand] = useState(null); // round name when expanded
   const [liveCard, setLiveCard] = useState(null); // idx of GS card expanded for in-game calc
-  const [liveInputs, setLiveInputs] = useState({}); // { [idx]: { tau, gA, gB, redsA, redsB, s1, s2, csA, csB } }
+  const [liveInputs, setLiveInputs] = useState({}); // { [idx]: { tau, gA, gB, redsA, redsB, s1, s2, csA, csB, ev } }
+  const [evForm, setEvForm] = useState({ t: 'g', s: 'A', m: '' }); // editor de evento minutado do card ao vivo aberto
+  const [koHist, setKoHist] = useState(null); // mn do card KO com histórico de Copas aberto
   const [bracketSel, setBracketSel] = useState(null); // {type:'match',mn} | {type:'group',gn} | null — painel de detalhe do bracket
   const [surSort, setSurSort] = useState('bits'); // ordenação da aba Surpresas: 'bits' | 'impact'
   const [surExpand, setSurExpand] = useState(null); // resKey expandida (movers) na aba Surpresas
@@ -1119,6 +1171,21 @@ export default function WC2026() {
     }).sort((x, y) => Math.abs(y.dAdv) - Math.abs(x.dAdv));
     return { type: 'gs', gn, q, n: IMPACT_N, movers, headline: movers[0] };
   };
+
+  // Série do gráfico de evolução ao vivo — memoizada pelos CAMPOS dos eventos/acréscimos:
+  // arrastar o slider (tau) NÃO recalcula a série, só a linha vertical re-renderiza.
+  const liC = liveCard != null ? liveInputs[liveCard] : null;
+  const liveChart = useMemo(() => {
+    if (liveCard == null || !liC?.ev?.length) return null;
+    _rSys = rSys; _customElo = customElo; _ME = customME; _useTilt = useTilt; _fav = favWeight; _spread = spread; _injM = injuries; _hb = homeAdv;
+    const [gn, hi, ai, , city] = GS[liveCard];
+    const home = groups[gn][hi], away = groups[gn][ai];
+    const im = injuries[liveCard] || {};
+    const eH = efCity(home, city) - (im.h || 0) * INJ_ELO;
+    const eA = efCity(away, city) - (im.a || 0) * INJ_ELO;
+    const s1 = Math.max(0, Math.min(15, +liC.s1 || 0)), s2 = Math.max(0, Math.min(15, +liC.s2 || 0));
+    return liveSeriesCalc(eH, eA, home, away, liC.ev, s1, s2);
+  }, [liveCard, liC?.ev, liC?.s1, liC?.s2, injuries, groups, rSys, customElo, customME, useTilt, favWeight, spread, homeAdv]);
 
   // Cenário modal/mediano de um grupo: cada um dos 6 jogos termina no placar
   // moda/mediana (resultados preenchidos e lesões respeitados); a tabela deriva
@@ -1340,6 +1407,28 @@ export default function WC2026() {
   const SB = ({ active, onClick, children }) => (
     <button onClick={onClick} style={{ padding: '4px 9px', fontSize: '10px', fontWeight: active ? 700 : 400, background: active ? `${acc}22` : card, color: active ? acc : dm, border: `1px solid ${active ? acc : bd}`, borderRadius: '4px', cursor: 'pointer' }}>{children}</button>
   );
+
+  // Histórico de confrontos em Copas do Mundo entre a e b (base WCH, 1930-2022)
+  const h2hBox = (a, b) => {
+    const { matches, tally } = wcH2H(a, b);
+    return (
+      <div style={{ marginTop: '6px', padding: '8px 10px', background: '#0d111d', borderRadius: '4px', border: `1px solid ${bd}` }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: '4px', flexWrap: 'wrap', gap: '4px' }}>
+          <span style={{ fontSize: '10px', fontWeight: 700, color: gd }}>📜 Confrontos em Copas</span>
+          {matches.length > 0 && <span style={{ fontSize: '9px', color: dm }}>{nm(a)}: <strong style={{ color: tally.wA > tally.wB ? gn : tx }}>{tally.wA}V</strong> <strong style={{ color: tx }}>{tally.d}E</strong> <strong style={{ color: tally.wB > tally.wA ? rd : tx }}>{tally.wB}D</strong> em {matches.length} jogo{matches.length > 1 ? 's' : ''}</span>}
+        </div>
+        {matches.length === 0 ? <div style={{ fontSize: '9px', color: dm, fontStyle: 'italic' }}>{nm(a)} e {nm(b)} nunca se enfrentaram em Copas (1930-2022).</div>
+          : matches.map((m2, i) => (
+            <div key={i} style={{ display: 'grid', gridTemplateColumns: '34px 78px 1fr', gap: '6px', alignItems: 'center', fontSize: '10px', padding: '1px 0' }}>
+              <span style={{ color: gd, fontWeight: 600 }}>{m2.y}</span>
+              <span style={{ color: bl, fontSize: '9px' }}>{WCH_ST[m2.st] || m2.st}{m2.rep ? ' (desempate)' : ''}</span>
+              <span>{fl(m2.h)} {nm(m2.h)} <strong style={{ color: m2.gh > m2.ga ? gn : m2.gh < m2.ga ? rd : tx }}>{m2.gh}–{m2.ga}</strong> {nm(m2.a)} {fl(m2.a)}{typeof m2.pen === 'string' ? <span style={{ color: dm, fontSize: '9px' }}> (pên {m2.pen.replace('-', '–')})</span> : m2.pen === 1 ? <span style={{ color: dm, fontSize: '9px' }}> (prorr.)</span> : null}</span>
+            </div>
+          ))}
+        <div style={{ fontSize: '7px', color: `${dm}99`, marginTop: '4px' }}>Fonte: Fjelstul World Cup Database (CC-BY 4.0)</div>
+      </div>
+    );
+  };
 
   // KO match card
   const KO = ({ m, sp }) => {
@@ -2888,6 +2977,8 @@ export default function WC2026() {
                       </div>
                     </div>
 
+                    {h2hBox(duelA, duelB)}
+
                     {sameGroup && <div style={{ background: `${gn}15`, border: `1px solid ${gn}44`, borderRadius: '6px', padding: '8px 12px', marginBottom: '10px' }}>
                       <div style={{ fontSize: '11px', fontWeight: 700, color: gn }}>Mesmo grupo ({grpA}) — jogam na fase de grupos</div>
                       {gsMatch >= 0 && <div style={{ fontSize: '10px', color: dm, marginTop: '2px' }}>M{gsMatch+1} • {DOW(GS[gsMatch][3])} {GS[gsMatch][3]} {GS_BRT[gsMatch]} BRT • {GS[gsMatch][4]}</div>}
@@ -3595,6 +3686,7 @@ export default function WC2026() {
                                 <span style={{ color: gn }}>{pr.pH.toFixed(0)}%</span>
                                 <span style={{ color: dm }}>E {pr.pD.toFixed(0)}%</span>
                                 <span style={{ color: bl }}>{pr.pA.toFixed(0)}%</span>
+                                <button onClick={() => setKoHist(h => h === m.mn ? null : m.mn)} title="Confrontos anteriores em Copas entre os dois times" style={{ padding: '0px 5px', fontSize: '10px', background: koHist === m.mn ? `${gd}33` : 'transparent', color: koHist === m.mn ? gd : dm, border: `1px solid ${koHist === m.mn ? gd : bd}`, borderRadius: '3px', cursor: 'pointer' }}>📜</button>
                               </div>}
                             </div>
                             <div style={{ display: 'grid', gridTemplateColumns: '1fr 90px 1fr', alignItems: 'center', gap: '4px' }}>
@@ -3631,6 +3723,7 @@ export default function WC2026() {
                                 </div>
                               );
                             })()}
+                            {ready && koHist === m.mn && h2hBox(m.h, m.a)}
                           </div>
                         );
                       })}
@@ -3661,11 +3754,13 @@ export default function WC2026() {
                     const fx = userRes[m.idx];
                     const hasFx = fx?.gA != null && fx?.gB != null;
                     const isLive = liveCard === m.idx;
-                    const LI_DEF = { tau: 0, gA: 0, gB: 0, redsA: 0, redsB: 0, s1: 3, s2: 6, csA: '', csB: '' };
+                    const LI_DEF = { tau: 0, gA: 0, gB: 0, redsA: 0, redsB: 0, s1: 3, s2: 6, csA: '', csB: '', ev: [] };
                     const li = { ...LI_DEF, ...(liveInputs[m.idx] || {}) };
                     const liS1 = Math.max(0, Math.min(15, +li.s1 || 0)), liS2 = Math.max(0, Math.min(15, +li.s2 || 0));
                     const liTau = Math.max(0, Math.min(90 + liS1 + liS2, +li.tau || 0)); // clamp: reduzir acréscimos depois de mover o slider não pode estourar
-                    const liveP = isLive ? liveProbs(_eH, _eA, m.home, m.away, { tau: liTau, gA: +li.gA || 0, gB: +li.gB || 0, redsA: +li.redsA || 0, redsB: +li.redsB || 0, s1: liS1, s2: liS2 }) : null;
+                    const hasEv = li.ev.length > 0; // com eventos minutados, o estado do jogo em τ deriva deles
+                    const liSt = hasEv ? evState(li.ev, liTau) : { gA: +li.gA || 0, gB: +li.gB || 0, redsA: +li.redsA || 0, redsB: +li.redsB || 0 };
+                    const liveP = isLive ? liveProbs(_eH, _eA, m.home, m.away, { tau: liTau, ...liSt, s1: liS1, s2: liS2 }) : null;
                     const setLI = (field, val) => setLiveInputs(p => ({ ...p, [m.idx]: { ...LI_DEF, ...(p[m.idx] || {}), [field]: val } }));
                     return (
                       <div key={m.idx} style={{ background: card, borderRadius: '5px', padding: '6px 10px', marginBottom: '3px', border: `1px solid ${isLive ? acc : hasFx ? gn + '44' : bd}` }}>
@@ -3709,7 +3804,7 @@ export default function WC2026() {
                             <div style={{ display: 'grid', gridTemplateColumns: 'auto 1fr auto auto auto auto auto', gap: '6px', alignItems: 'center', fontSize: '10px', marginBottom: '4px' }}>
                               <span style={{ color: dm }}>Min:</span>
                               <input type="range" min="0" max={90 + liS1 + liS2} value={liTau} onChange={e => setLI('tau', +e.target.value)} style={{ width: '100%' }} />
-                              <span style={{ fontWeight: 700, color: acc, minWidth: '40px', textAlign: 'right' }}>{fmtClock(liTau, liS1)}</span>
+                              <span style={{ fontWeight: 700, color: acc, minWidth: '40px', textAlign: 'right' }}>{fmtClock(liTau, liS1)}{hasEv && <span style={{ color: tx, fontWeight: 600 }}> {liSt.gA}×{liSt.gB}</span>}</span>
                               <button onClick={() => setLI('tau', 0)} style={{ padding: '1px 6px', fontSize: '9px', background: 'transparent', color: dm, border: `1px solid ${bd}`, borderRadius: '3px', cursor: 'pointer' }}>0'</button>
                               <button onClick={() => setLI('tau', 45 + liS1)} style={{ padding: '1px 6px', fontSize: '9px', background: 'transparent', color: dm, border: `1px solid ${bd}`, borderRadius: '3px', cursor: 'pointer' }}>HT</button>
                               <button onClick={() => setLI('tau', 90 + liS1)} style={{ padding: '1px 6px', fontSize: '9px', background: 'transparent', color: dm, border: `1px solid ${bd}`, borderRadius: '3px', cursor: 'pointer' }} title="90' — começam os acréscimos do 2º tempo">FT</button>
@@ -3728,20 +3823,52 @@ export default function WC2026() {
                                 <div style={{ fontSize: '9px', color: dm, marginBottom: '3px', textAlign: 'center' }}>{fl(m.home)} {nm(m.home)}</div>
                                 <div style={{ display: 'flex', justifyContent: 'center', gap: '4px', alignItems: 'center', fontSize: '9px' }}>
                                   <span style={{ color: dm }}>Gols:</span>
-                                  <input type="number" min="0" max="20" value={li.gA} onChange={e => setLI('gA', +e.target.value || 0)} style={{ width: '36px', padding: '2px', textAlign: 'center', background: card, color: tx, border: `1px solid ${bd}`, borderRadius: '3px', fontSize: '11px', fontWeight: 700 }} />
+                                  <input type="number" min="0" max="20" value={hasEv ? liSt.gA : li.gA} disabled={hasEv} title={hasEv ? 'derivado dos eventos com minuto' : undefined} onChange={e => setLI('gA', +e.target.value || 0)} style={{ width: '36px', padding: '2px', textAlign: 'center', background: card, color: tx, border: `1px solid ${bd}`, borderRadius: '3px', fontSize: '11px', fontWeight: 700, opacity: hasEv ? 0.55 : 1 }} />
                                   <span style={{ color: dm, marginLeft: '4px' }}>🟥</span>
-                                  <input type="number" min="0" max="3" value={li.redsA} onChange={e => setLI('redsA', +e.target.value || 0)} style={{ width: '32px', padding: '2px', textAlign: 'center', background: card, color: tx, border: `1px solid ${bd}`, borderRadius: '3px', fontSize: '11px' }} />
+                                  <input type="number" min="0" max="3" value={hasEv ? liSt.redsA : li.redsA} disabled={hasEv} title={hasEv ? 'derivado dos eventos com minuto' : undefined} onChange={e => setLI('redsA', +e.target.value || 0)} style={{ width: '32px', padding: '2px', textAlign: 'center', background: card, color: tx, border: `1px solid ${bd}`, borderRadius: '3px', fontSize: '11px', opacity: hasEv ? 0.55 : 1 }} />
                                 </div>
                               </div>
                               <div>
                                 <div style={{ fontSize: '9px', color: dm, marginBottom: '3px', textAlign: 'center' }}>{fl(m.away)} {nm(m.away)}</div>
                                 <div style={{ display: 'flex', justifyContent: 'center', gap: '4px', alignItems: 'center', fontSize: '9px' }}>
                                   <span style={{ color: dm }}>Gols:</span>
-                                  <input type="number" min="0" max="20" value={li.gB} onChange={e => setLI('gB', +e.target.value || 0)} style={{ width: '36px', padding: '2px', textAlign: 'center', background: card, color: tx, border: `1px solid ${bd}`, borderRadius: '3px', fontSize: '11px', fontWeight: 700 }} />
+                                  <input type="number" min="0" max="20" value={hasEv ? liSt.gB : li.gB} disabled={hasEv} title={hasEv ? 'derivado dos eventos com minuto' : undefined} onChange={e => setLI('gB', +e.target.value || 0)} style={{ width: '36px', padding: '2px', textAlign: 'center', background: card, color: tx, border: `1px solid ${bd}`, borderRadius: '3px', fontSize: '11px', fontWeight: 700, opacity: hasEv ? 0.55 : 1 }} />
                                   <span style={{ color: dm, marginLeft: '4px' }}>🟥</span>
-                                  <input type="number" min="0" max="3" value={li.redsB} onChange={e => setLI('redsB', +e.target.value || 0)} style={{ width: '32px', padding: '2px', textAlign: 'center', background: card, color: tx, border: `1px solid ${bd}`, borderRadius: '3px', fontSize: '11px' }} />
+                                  <input type="number" min="0" max="3" value={hasEv ? liSt.redsB : li.redsB} disabled={hasEv} title={hasEv ? 'derivado dos eventos com minuto' : undefined} onChange={e => setLI('redsB', +e.target.value || 0)} style={{ width: '32px', padding: '2px', textAlign: 'center', background: card, color: tx, border: `1px solid ${bd}`, borderRadius: '3px', fontSize: '11px', opacity: hasEv ? 0.55 : 1 }} />
                                 </div>
                               </div>
+                            </div>
+                            {/* Eventos minutados → gráfico de evolução */}
+                            <div style={{ marginBottom: '8px', padding: '6px 8px', background: card, borderRadius: '3px', border: `1px solid ${bd}` }}>
+                              <div style={{ display: 'flex', gap: '4px', alignItems: 'center', fontSize: '9px', color: dm, flexWrap: 'wrap' }}>
+                                <span title="Eventos com minuto alimentam o gráfico de evolução; o placar/vermelhos em cada minuto deriva deles (não altera o placar final do card)">Eventos:</span>
+                                {[['g', '⚽ Gol'], ['r', '🟥 Verm.']].map(([v, l]) => (
+                                  <button key={v} onClick={() => setEvForm(f => ({ ...f, t: v }))} style={{ padding: '1px 6px', fontSize: '9px', background: evForm.t === v ? `${acc}33` : 'transparent', color: evForm.t === v ? acc : dm, border: `1px solid ${evForm.t === v ? acc : bd}`, borderRadius: '3px', cursor: 'pointer' }}>{l}</button>
+                                ))}
+                                {[['A', nm(m.home).slice(0, 8)], ['B', nm(m.away).slice(0, 8)]].map(([v, l]) => (
+                                  <button key={v} onClick={() => setEvForm(f => ({ ...f, s: v }))} style={{ padding: '1px 6px', fontSize: '9px', background: evForm.s === v ? `${(v === 'A' ? gn : bl)}33` : 'transparent', color: evForm.s === v ? (v === 'A' ? gn : bl) : dm, border: `1px solid ${evForm.s === v ? (v === 'A' ? gn : bl) : bd}`, borderRadius: '3px', cursor: 'pointer' }}>{l}</button>
+                                ))}
+                                <span>aos</span>
+                                <input type="number" inputMode="numeric" min="0" max={90 + liS2} placeholder="min" title="Minuto do relógio do jogo, como na transmissão (ex.: 23, 60; 93 = 90+3)" value={evForm.m} onChange={e => setEvForm(f => ({ ...f, m: e.target.value }))} style={{ width: '40px', padding: '2px', textAlign: 'center', background: '#0d111d', color: tx, border: `1px solid ${bd}`, borderRadius: '3px', fontSize: '10px' }} />
+                                <button disabled={evForm.m === '' || isNaN(+evForm.m)} onClick={() => {
+                                  // minuto digitado = relógio do jogo (como na transmissão) → τ absoluto: depois dos 45' soma o acréscimo do 1ºT
+                                  const gm2 = +evForm.m;
+                                  const mm = Math.max(0, Math.min(90 + liS1 + liS2, gm2 <= 45 ? gm2 : gm2 + liS1));
+                                  setLI('ev', [...li.ev, { m: mm, t: evForm.t, s: evForm.s }].sort((x, y) => x.m - y.m));
+                                  setEvForm(f => ({ ...f, m: '' }));
+                                }} style={{ padding: '1px 8px', fontSize: '10px', fontWeight: 700, background: evForm.m === '' ? 'transparent' : `${acc}33`, color: evForm.m === '' ? dm : acc, border: `1px solid ${evForm.m === '' ? bd : acc}`, borderRadius: '3px', cursor: evForm.m === '' ? 'default' : 'pointer' }}>+</button>
+                              </div>
+                              {hasEv && (
+                                <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap', marginTop: '5px' }}>
+                                  {li.ev.map((e2, i) => (
+                                    <span key={i} style={{ display: 'inline-flex', gap: '3px', alignItems: 'center', padding: '1px 6px', fontSize: '9px', borderRadius: '3px', background: `${e2.s === 'A' ? gn : bl}18`, border: `1px solid ${e2.s === 'A' ? gn : bl}44`, color: tx }}>
+                                      {e2.t === 'g' ? '⚽' : '🟥'} {fmtClock(e2.m, liS1)} {nm(e2.s === 'A' ? m.home : m.away).slice(0, 3).toUpperCase()}
+                                      <span onClick={() => setLI('ev', li.ev.filter((_, j) => j !== i))} style={{ color: rd, cursor: 'pointer', fontWeight: 700 }}>✕</span>
+                                    </span>
+                                  ))}
+                                  <span onClick={() => setLI('ev', [])} style={{ fontSize: '8px', color: dm, cursor: 'pointer', alignSelf: 'center', textDecoration: 'underline' }}>limpar</span>
+                                </div>
+                              )}
                             </div>
                             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '4px', fontSize: '10px', marginBottom: '6px' }}>
                               <div style={{ background: `${gn}22`, padding: '4px', borderRadius: '3px', textAlign: 'center', border: `1px solid ${gn}44` }}>
@@ -3771,12 +3898,50 @@ export default function WC2026() {
                                 <input type="number" min="0" max="20" value={li.csB} onChange={e => setLI('csB', e.target.value)} placeholder="-" style={{ width: '32px', padding: '2px', textAlign: 'center', background: card, color: tx, border: `1px solid ${bd}`, borderRadius: '3px', fontSize: '11px', fontWeight: 700 }} />
                                 {li.csA !== '' && li.csB !== '' && (() => {
                                   const sa = +li.csA, sb = +li.csB;
-                                  if (sa < (+li.gA || 0) || sb < (+li.gB || 0)) return <span style={{ color: rd }}>impossível (abaixo do placar atual)</span>;
+                                  if (sa < liSt.gA || sb < liSt.gB) return <span style={{ color: rd }}>impossível (abaixo do placar atual)</span>;
                                   const pcs = liveP.pOf(sa, sb) * 100;
                                   return <span>→ <strong style={{ color: acc, fontSize: '11px' }}>{pcs >= 0.01 ? pcs.toFixed(2) : '<0.01'}%</strong> de terminar {sa}–{sb}</span>;
                                 })()}
                               </div>
                             </div>
+                            {/* Gráfico da evolução de P(V/E/D) — aparece quando há eventos minutados */}
+                            {hasEv && liveChart && (() => {
+                              const W = 800, H = 240, PAD = { l: 38, r: 14, t: 14, b: 26 };
+                              const total = 90 + liS1 + liS2;
+                              const xS = t2 => PAD.l + (t2 / total) * (W - PAD.l - PAD.r);
+                              const yS = p2 => PAD.t + (1 - p2 / 100) * (H - PAD.t - PAD.b);
+                              const mkPath = key => liveChart.map((p2, i) => (i === 0 ? 'M' : 'L') + xS(p2.tau).toFixed(1) + ',' + yS(p2[key]).toFixed(1)).join(' ');
+                              const last = liveChart[liveChart.length - 1];
+                              const series = [['pH', gn, 'V ' + nm(m.home).slice(0, 3).toUpperCase()], ['pD', dm, 'E'], ['pA', bl, 'V ' + nm(m.away).slice(0, 3).toUpperCase()]];
+                              return (
+                                <div style={{ marginBottom: '6px' }}>
+                                  <div style={{ fontSize: '8px', color: dm, marginBottom: '2px' }}>Evolução da probabilidade durante o jogo (com os eventos informados)</div>
+                                  <svg viewBox={`0 0 ${W} ${H}`} style={{ width: '100%', height: 'auto', display: 'block', background: card, borderRadius: '4px', border: `1px solid ${bd}` }}>
+                                    {[0, 25, 50, 75, 100].map(g => (
+                                      <g key={g}>
+                                        <line x1={PAD.l} x2={W - PAD.r} y1={yS(g)} y2={yS(g)} stroke={bd} strokeWidth="0.5" />
+                                        <text x={PAD.l - 5} y={yS(g) + 3} fontSize="9" fill={dm} textAnchor="end">{g}%</text>
+                                      </g>
+                                    ))}
+                                    {[[0, "0'"], [45, "45'"], [90 + liS1, "90'"], [total, 'Fim']].map(([t2, l2]) => (
+                                      <text key={l2} x={xS(Math.min(t2, total))} y={H - PAD.b + 13} fontSize="9" fill={dm} textAnchor="middle">{l2}</text>
+                                    ))}
+                                    <line x1={xS(liTau)} x2={xS(liTau)} y1={PAD.t} y2={H - PAD.b} stroke={acc} strokeWidth="1" strokeDasharray="3,3" />
+                                    {series.map(([k, c]) => <path key={k} d={mkPath(k)} stroke={c} strokeWidth="2" fill="none" />)}
+                                    {series.map(([k, c], i) => <text key={k} x={W - PAD.r + 2 - 36} y={yS(last[k]) + (i === 1 ? 10 : 3)} fontSize="10" fill={c} fontWeight="700" textAnchor="start">{last[k].toFixed(0)}%</text>)}
+                                    {li.ev.filter(e2 => e2.m <= total).map((e2, i) => (
+                                      <text key={i} x={xS(e2.m)} y={H - PAD.b - 3} fontSize="11" textAnchor="middle" style={{ userSelect: 'none' }}>{e2.t === 'g' ? '⚽' : '🟥'}</text>
+                                    ))}
+                                    {series.map(([k, c, l2], i) => (
+                                      <g key={'lg' + k}>
+                                        <rect x={PAD.l + 6 + i * 92} y={PAD.t} width="10" height="3" fill={c} />
+                                        <text x={PAD.l + 19 + i * 92} y={PAD.t + 4} fontSize="9" fill={c}>{l2}</text>
+                                      </g>
+                                    ))}
+                                  </svg>
+                                </div>
+                              );
+                            })()}
                             <div style={{ fontSize: '9px', color: dm, textAlign: 'center' }}>Placar final esperado: <strong style={{ color: tx }}>{liveP.expScoreA.toFixed(1)} - {liveP.expScoreB.toFixed(1)}</strong> • λ restante: {liveP.laR.toFixed(2)}/{liveP.lbR.toFixed(2)} gols</div>
                             <div style={{ fontSize: '8px', color: dm, marginTop: '4px', textAlign: 'center', fontStyle: 'italic' }}>Modelo: a intensidade de gols cresce ao longo do jogo (~{Math.round(LIVE_F2 * 100)}% dos gols no 2º tempo) e os acréscimos jogam com a intensidade do fim de cada tempo; o total esperado da partida é preservado. Cada vermelho: 0.78× ao infrator, 1.12× ao adversário.</div>
                           </div>
@@ -3797,6 +3962,7 @@ export default function WC2026() {
                             ); })}
                           </div>
                         )}
+                        {isLive && h2hBox(m.home, m.away)}
                       </div>
                     );
                   })}
@@ -4267,6 +4433,7 @@ export default function WC2026() {
               <p><strong style={{ color: tx }}>⚽ Goleada (desnível):</strong> Na realidade, quanto maior a diferença de Elo, mais gols o jogo tem — e quase todos do favorito (nos dados 2016–26: jogo equilibrado ~2,35 gols; grande desnível ~3,45, com o favorito indo de 1,2 a 3,1 e o azarão caindo de 1,1 a 0,3). Este tilt é <strong>multiplicativo</strong> sobre o total, via logística: <code style={{ color: bl, fontSize: '9px' }}>g(Δ) = 0.90 + 0.45/(1+e^(−(|Δ|−330)/80))</code> — ~0,91× em jogos equilibrados subindo a ~1,35× em grandes desníveis. Não afeta jogos parelhos.</p>
               <p><strong style={{ color: tx }}>Como se combinam:</strong> os dois multiplicam/somam no mesmo total — <code style={{ color: bl, fontSize: '9px' }}>me = (_ME + tilt_estilo·0.5) × g(Δ)</code> — então um confronto de estilos ofensivos num grande desnível acumula os dois efeitos. E a Goleada trabalha junto com o <strong>Favoritismo</strong> (o c0): o c0 <em>redistribui</em> (favorito sobe, azarão desce) enquanto a Goleada <em>aumenta o total</em>; juntos, reproduzem tanto os gols do favorito quanto os do azarão observados na realidade. Ambos são toggles independentes, ligados por padrão; desligue a Goleada para voltar ao total constante.</p>
               <p><strong style={{ color: tx }}>PELE:</strong> 79 seleções fornecidas pelo usuário (75 + Catar/Cabo Verde/Curaçao/Jamaica). Cobertura completa das 54 seleções do simulador.</p>
+              <p><strong style={{ color: tx }}>📜 Confrontos em Copas:</strong> histórico de jogos de Copas do Mundo (1930-2022) entre as seleções do simulador, exibido nos cards de Resultados e em Cruzamentos ▸ Duelo. Fonte: <strong style={{ color: acc }}>Fjelstul World Cup Database</strong> (github.com/jfjelstul/worldcup, licença CC-BY 4.0). Sucessores oficiais contam (Alemanha Ocidental → Alemanha, Tchecoslováquia → Tchéquia); empates decididos nos pênaltis contam como empate no retrospecto.</p>
               <p><strong style={{ color: tx }}>R32:</strong> M73(2A×2B) M74(1E×3°) M75(1F×2C) M76(1C×2F) M77(1I×3°) M78(2E×2I) M79(1A×3°) M80(1L×3°) M81(1D×3°) M82(1G×3°) M83(2K×2L) M84(1H×2J) M85(1B×3°) M86(1J×2H) M87(1K×3°) M88(2D×2G)</p>
               <p><strong style={{ color: tx }}>R16:</strong> M89(W74×W77) M90(W73×W75) M91(W76×W78) M92(W79×W80) M93(W83×W84) M94(W81×W82) M95(W86×W88) M96(W85×W87)</p>
               <p><strong style={{ color: tx }}>QF:</strong> M97(W89×W90) M98(W93×W94) M99(W91×W92) M100(W95×W96)</p>

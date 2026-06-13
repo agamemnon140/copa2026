@@ -33,8 +33,15 @@ const code = [
   grab('const groupPosProbs = (games, teams, gn', 'return counts;\n};'),
   grab('const koAdvProb = (a, b, tA, tB)', 'r90, ret, pen };\n};'),
   grab('const liveProbs = (a, b, tA, tB,', 'scores, pOf };\n};'),
+  grab('const evState = (ev, tau)', 'return st;\n};'),
+  grab('const liveSeriesCalc = (eH, eA, tA, tB, ev, s1, s2)', 'return out;\n};'),
+  // bloco WCH gerado (WCH_TEAMS/WCH_ST/WCH) + wcH2H
+  src.slice(src.indexOf('// === WCH:BEGIN'), src.indexOf('// === WCH:END ===')),
+  grab('const wcH2H = (a, b)', 'return out;\n};'),
 ].join('\n');
-const { liveRemFrac, fmtClock, liveProbs, makeRnd, sP, cL, groupPosProbs, koAdvProb } = eval(code + '\n;({ liveRemFrac, fmtClock, liveProbs, makeRnd, sP, cL, groupPosProbs, koAdvProb });');
+const { liveRemFrac, fmtClock, liveProbs, makeRnd, sP, cL, groupPosProbs, koAdvProb, evState, liveSeriesCalc, wcH2H, WCH, WCH_TEAMS, WCH_ST } =
+  eval(code + '\n;({ liveRemFrac, fmtClock, liveProbs, makeRnd, sP, cL, groupPosProbs, koAdvProb, evState, liveSeriesCalc, wcH2H, WCH, WCH_TEAMS, WCH_ST });');
+const FL_KEYS = new Set([...src.match(/const FL\s*=\s*\{([\s\S]*?)\};/)[1].matchAll(/'([^']+)'\s*:/g)].map(m2 => m2[1]));
 
 let fail = 0;
 const chk = (label, cond, extra) => { console.log((cond ? '✔' : '✘'), label, extra ?? ''); if (!cond) fail++; };
@@ -111,6 +118,37 @@ const fx5 = { 5: { gA: 1, gB: 0 } };
 const gpW = groupPosProbs(mkG(fx5), T, 'X', 2000, 1);
 const gpO = groupPosProbs(mkG(), T, 'X', 2000, 1);
 chk('groupPosProbs: CRN — Δ pareado pequeno e coerente', T.every(t => [0, 1, 2, 3].every(p => Math.abs(gpW[t][p] - gpO[t][p]) <= 2000)), JSON.stringify(T.map(t => gpW[t][0] - gpO[t][0])));
+
+// WCH — base histórica de Copas (gerada)
+chk('WCH: base não-vazia (~600 jogos)', WCH.length > 400, WCH.length);
+chk('WCH: anos 1930-2022', WCH.every(r => r[0] >= 1930 && r[0] <= 2022));
+chk('WCH: fases conhecidas', WCH.every(r => WCH_ST[r[1]] != null));
+chk('WCH: índices de time válidos', WCH.every(r => WCH_TEAMS[r[2]] != null && WCH_TEAMS[r[3]] != null));
+chk('WCH_TEAMS ⊆ chaves do app (FL)', WCH_TEAMS.every(t => FL_KEYS.has(t)), WCH_TEAMS.filter(t => !FL_KEYS.has(t)).join(','));
+
+// wcH2H
+const bs = wcH2H('Brazil', 'Sweden');
+chk('wcH2H: Brasil×Suécia tem jogos', bs.matches.length >= 5, bs.matches.length + ' jogos');
+chk('wcH2H: final de 1958 (Brasil 5–2 Suécia) presente', bs.matches.some(m2 => m2.y === 1958 && m2.st === 'F' && ((m2.h === 'Brazil' && m2.gh === 5 && m2.ga === 2) || (m2.h === 'Sweden' && m2.gh === 2 && m2.ga === 5))), JSON.stringify(bs.matches.find(m2 => m2.y === 1958)));
+chk('wcH2H: ordenado por ano desc', bs.matches.every((m2, i) => i === 0 || bs.matches[i - 1].y >= m2.y));
+const sb = wcH2H('Sweden', 'Brazil');
+chk('wcH2H: simétrico (wA(a,b) = wB(b,a))', bs.tally.wA === sb.tally.wB && bs.tally.wB === sb.tally.wA && bs.tally.d === sb.tally.d);
+chk('wcH2H: tally soma = nº de jogos', bs.tally.wA + bs.tally.d + bs.tally.wB === bs.matches.length);
+chk('wcH2H: par sem confronto → vazio', wcH2H('Jordan', 'Curaçao').matches.length === 0);
+
+// evState / liveSeriesCalc
+const EV = [{ m: 23, t: 'g', s: 'A' }, { m: 60, t: 'r', s: 'B' }, { m: 75, t: 'g', s: 'B' }];
+chk('evState: vazio em τ=0', JSON.stringify(evState(EV, 0)) === JSON.stringify({ gA: 0, gB: 0, redsA: 0, redsB: 0 }));
+chk('evState: inclusivo em m===τ', evState(EV, 23).gA === 1 && evState(EV, 22.99).gA === 0);
+chk('evState: estado completo no fim', JSON.stringify(evState(EV, 99)) === JSON.stringify({ gA: 1, gB: 1, redsA: 0, redsB: 1 }));
+const SER = liveSeriesCalc(1800, 1700, '', '', EV, 3, 6);
+chk('liveSeriesCalc: pontos somam 100', SER.every(p => Math.abs(p.pH + p.pD + p.pA - 100) < 1e-9));
+const p0 = liveProbs(1800, 1700, '', '', { tau: 0, gA: 0, gB: 0, redsA: 0, redsB: 0, s1: 3, s2: 6 });
+chk('liveSeriesCalc: ponto τ=0 ≡ liveProbs(0)', Math.abs(SER[0].pH - p0.pH) < 1e-9 && SER[0].tau === 0);
+const at = tau => SER.find(p => p.tau === tau);
+chk('liveSeriesCalc: gol do A aos 23 → pH salta', at(23).pH > at(22.99).pH + 5, `${at(22.99).pH.toFixed(1)} → ${at(23).pH.toFixed(1)}`);
+chk('liveSeriesCalc: gol do B aos 75 → pA salta', at(75).pA > at(74.99).pA + 5, `${at(74.99).pA.toFixed(1)} → ${at(75).pA.toFixed(1)}`);
+chk('liveSeriesCalc: cobre 0..fim', SER[0].tau === 0 && SER[SER.length - 1].tau === 99);
 
 console.log(fail === 0 ? '\nTODOS OS TESTES PASSARAM' : `\n${fail} TESTE(S) FALHARAM`);
 process.exit(fail ? 1 : 0);

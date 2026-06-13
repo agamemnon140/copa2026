@@ -61,8 +61,8 @@ const fail = (name, detail) => { results.push({ s: '❌', name, detail }); conso
   if (t.includes("45+2'")) ok("Relógio: τ=47 com +3 de acréscimo → \"45+2'\""); else fail('Relógio em τ=47', t.match(/Min:[\s\S]{0,40}/)?.[0]);
 
   // zera acréscimo do 1ºT → mesmo τ vira 47'
-  const s1Input = card.locator('input[type=number]').nth(2); // gA, gB do placar vêm antes? ordem: placar gA, gB, depois s1, s2…
-  // ordem real no card: [0]=gA placar, [1]=gB placar, [2]=s1, [3]=s2, [4]=gols A live, [5]=reds A, [6]=gols B live, [7]=reds B, [8]=csA, [9]=csB
+  const s1Input = card.locator('input[type=number]').nth(2);
+  // ordem real no card: [0]=gA placar, [1]=gB placar, [2]=s1, [3]=s2, [4]=gols A live, [5]=reds A, [6]=gols B live, [7]=reds B, [8]=minuto do evento (placeholder "min"), [9]=csA, [10]=csB
   await setVal(s1Input, 0);
   t = await liveTxt();
   if (t.includes("47'")) probe("Acréscimo 1ºT → 0: mesmo τ=47 agora exibe \"47'\" (45+2' ≠ 47')"); else fail('Relógio após zerar s1', t.match(/Min:[\s\S]{0,40}/)?.[0]);
@@ -86,7 +86,7 @@ const fail = (name, detail) => { results.push({ s: '❌', name, detail }); conso
   if (chips === 6) ok('6 chips de placares mais prováveis exibidos'); else fail('Chips de placares', chips + ' chips');
 
   // placar de interesse impossível (abaixo do placar atual 1×0)
-  const csA = card.locator('input[type=number]').nth(8), csB = card.locator('input[type=number]').nth(9);
+  const csA = card.locator('input[type=number]').nth(9), csB = card.locator('input[type=number]').nth(10);
   await setVal(csA, 0); await setVal(csB, 0);
   t = await liveTxt();
   if (t.includes('impossível')) probe('Placar de interesse 0×0 com jogo 1×0 → "impossível (abaixo do placar atual)"'); else fail('Placar impossível', 'não mostrou aviso');
@@ -98,6 +98,44 @@ const fail = (name, detail) => { results.push({ s: '❌', name, detail }); conso
   // volta para 0' e tira o gol, p/ screenshot limpo
   await card.locator('button', { hasText: /^0'$/ }).first().click();
   await page.screenshot({ path: path.join(SHOTS, '1-live-card.png'), fullPage: false });
+
+  /* ───── A2. Eventos minutados + gráfico de evolução ───── */
+  const minInput = card.locator('input[placeholder="min"]');
+  await setVal(minInput, 23);
+  await card.locator('button', { hasText: /^\+$/ }).first().click(); // editor de eventos vem antes dos + das lesões
+  await page.waitForTimeout(300);
+  t = await liveTxt();
+  if (t.includes("⚽ 23'")) ok('Evento ⚽ 23\' adicionado → chip aparece'); else fail('Chip do evento', t.match(/Eventos:[\s\S]{0,80}/)?.[0]);
+  const nPaths = await card.locator('svg path').count();
+  if (nPaths >= 3) ok('Gráfico de evolução renderiza (3 séries V/E/D)', nPaths + ' paths'); else fail('Gráfico não apareceu', nPaths + ' paths');
+  const golsDisabled = await card.locator('input[type=number]').nth(4).isDisabled();
+  if (golsDisabled) ok('Inputs de gols/vermelhos desabilitados (derivados dos eventos)'); else fail('Inputs não desabilitaram com eventos');
+  await setVal(slider, 30);
+  t = await liveTxt();
+  if (/30'\s*1×0/.test(t)) ok('Slider em 30\' → placar derivado 1×0 ao lado do relógio'); else fail('Placar derivado', t.match(/Min:[\s\S]{0,30}/)?.[0]);
+  await setVal(slider, 10);
+  t = await liveTxt();
+  if (/10'\s*0×0/.test(t)) probe('Slider em 10\' (antes do gol) → 0×0 derivado'); else fail('Derivação antes do evento', t.match(/Min:[\s\S]{0,30}/)?.[0]);
+  // segundo evento: 🟥 aos 60
+  await card.locator('button', { hasText: '🟥 Verm.' }).click();
+  await setVal(minInput, 60);
+  await card.locator('button', { hasText: /^\+$/ }).first().click();
+  await page.waitForTimeout(300);
+  const nEv = (await liveTxt()).match(/[⚽🟥] \d+'/g)?.length || 0;
+  if (nEv >= 2) probe('Segundo evento (🟥 60\') adicionado', nEv + ' chips'); else fail('Segundo evento', nEv + ' chips');
+  await page.screenshot({ path: path.join(SHOTS, '1b-live-chart.png') });
+  // remove tudo → gráfico some e inputs voltam
+  await card.locator('text=limpar').click();
+  await page.waitForTimeout(200);
+  const nPaths2 = await card.locator('svg path').count();
+  const golsEnabled = !(await card.locator('input[type=number]').nth(4).isDisabled());
+  if (nPaths2 === 0 && golsEnabled) probe('"limpar" remove eventos → gráfico some, inputs reabilitados');
+  else fail('Limpeza de eventos', `${nPaths2} paths, enabled=${golsEnabled}`);
+
+  /* ───── A3. H2H no card GS ───── */
+  t = await liveTxt();
+  if (t.includes('📜 Confrontos em Copas') && t.includes('2010')) ok('H2H no card GS: México×África do Sul mostra o jogo de 2010');
+  else fail('H2H no card GS', t.match(/📜[\s\S]{0,120}/)?.[0] || 'box ausente');
 
   /* ───── B. Badge surpresa + impacto ───── */
   const scoreA = card.locator('input[type=number]').nth(0), scoreB = card.locator('input[type=number]').nth(1);
@@ -165,9 +203,31 @@ const fail = (name, detail) => { results.push({ s: '❌', name, detail }); conso
     const ko = (await m73.innerText()).match(/⚡ avança: (.+?) \+([\d.]+) p\.p\./);
     if (ko) ok('KO M73 → badge ⚡ avança analítico, sem botão', `${ko[1]} +${ko[2]} p.p.`);
     else fail('Badge ⚡ avança não apareceu no M73');
+    // botão 📜 abre o histórico de Copas dos dois times
+    await m73.locator('button', { hasText: '📜' }).click();
+    await page.waitForTimeout(200);
+    const koT = await m73.innerText();
+    if (koT.includes('📜 Confrontos em Copas')) ok('KO M73: botão 📜 abre o histórico H2H');
+    else fail('H2H no card KO não abriu');
     await page.screenshot({ path: path.join(SHOTS, '2b-ko-badge.png') });
   } else fail('M73 não ficou pronto após preencher grupos A e B');
   await page.click('text=⚽ Jogos');
+  await page.waitForTimeout(200);
+
+  /* ───── B3. H2H no Duelo (Brasil × Argentina) ───── */
+  await page.click('text=🔀 Cruzam.');
+  await page.click('text=Duelo');
+  await page.waitForTimeout(300);
+  const sels = page.locator('select:has(option[value="Brazil"])'); // só os 2 selects do Duelo têm times
+  await sels.nth(0).selectOption('Brazil');
+  await sels.nth(1).selectOption('Argentina');
+  await page.waitForTimeout(300);
+  const duelBody = await page.locator('body').innerText();
+  if (duelBody.includes('📜 Confrontos em Copas') && duelBody.includes('1990') && /em \d+ jogos/.test(duelBody))
+    ok('Duelo Brasil×Argentina → H2H com retrospecto e jogos históricos', duelBody.match(/em (\d+) jogos/)?.[0]);
+  else fail('H2H no Duelo', duelBody.match(/📜[\s\S]{0,150}/)?.[0] || 'box ausente');
+  await page.screenshot({ path: path.join(SHOTS, '7-h2h-duelo.png') });
+  await page.click('text=📝 Resultados');
   await page.waitForTimeout(200);
 
   /* ───── C. Bracket clicável ───── */
