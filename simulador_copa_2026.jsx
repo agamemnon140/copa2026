@@ -1218,7 +1218,11 @@ export default function WC2026() {
     const wC = runGroupCached(gn, teams, mkGroupGames(gn, teams, { ...urMinus, [idx]: { gA, gB } }));
     const q = qP3(gn);
     const adv = (c, t) => (c[t][0] + c[t][1] + q * c[t][2]) / IMPACT_N * 100;
-    return { gn, q, rows: teams.map(t => ({ t, before: adv(oC, t), after: adv(wC, t) })) };
+    // P(o 3º colocado do grupo avançar): Σ_t P(t é 3º)·a_t, com a_t = P(avança | é 3º) do último MC.
+    // Baseline reproduz g3p[gn]; muda quando o resultado empurra um time forte/fraco para a 3ª posição.
+    const aOf = t => { const ga = res?.[t]?.g3a || 0, go = res?.[t]?.g3o || 0; return (ga + go) > 0 ? ga / (ga + go) : q; };
+    const gp3 = c => teams.reduce((s, t) => s + (c[t][2] / IMPACT_N) * aOf(t), 0) * 100;
+    return { gn, q, rows: teams.map(t => ({ t, before: adv(oC, t), after: adv(wC, t) })), third: { before: gp3(oC), after: gp3(wC), hasMC: !!res } };
   };
   // Tabela "expectativa de classificação antes → agora" dos 4 times do grupo, dado que
   // o jogo idx termina gA×gB. highlight = times a destacar (os que jogaram). Reusada
@@ -1245,6 +1249,18 @@ export default function WC2026() {
             </div>
           );
         })}
+        {sh.third.hasMC && (() => {
+          const d3 = sh.third.after - sh.third.before;
+          return (
+            <div style={{ marginTop: '4px', paddingTop: '4px', borderTop: `1px solid ${bd}`, display: 'grid', gridTemplateColumns: '1fr 52px 14px 52px 56px', gap: '4px', alignItems: 'center', fontSize: '9px' }} title="Chance de o time que terminar em 3º neste grupo entrar na repescagem dos 8 melhores 3ºs — ponderada pela chance de cada time ser o 3º (mini-MC) e pela qualidade de cada um como 3º (último MC).">
+              <span style={{ color: bl, fontWeight: 600 }}>3º do grupo se classifica</span>
+              <span style={{ textAlign: 'right', color: dm }}>{sh.third.before.toFixed(0)}%</span>
+              <span style={{ textAlign: 'center', color: dm }}>→</span>
+              <span style={{ textAlign: 'right', fontWeight: 700, color: bl }}>{sh.third.after.toFixed(0)}%</span>
+              <span style={{ textAlign: 'right', fontWeight: 700, color: d3 > 0.5 ? gn : d3 < -0.5 ? rd : dm }}>{d3 > 0 ? '+' : ''}{d3.toFixed(0)} p.p.</span>
+            </div>
+          );
+        })()}
       </div>
     );
   };
@@ -2240,15 +2256,15 @@ export default function WC2026() {
               return (
                 <div>
                   <div style={{ fontSize: '12px', fontWeight: 700, color: acc, marginBottom: '4px' }}>📰 Resultados inseridos — surpresa & impacto na classificação</div>
-                  <div style={{ fontSize: '10px', color: dm, marginBottom: '8px', lineHeight: 1.5, maxWidth: '760px' }}><strong style={{ color: tx }}>Surpresa</strong> = quão improvável era o placar exato antes do jogo, em bits (−log₂ P; cada +1 bit = metade da chance). <strong style={{ color: tx }}>Impacto</strong> = quanto o resultado moveu a chance de <em>classificação</em> dos times do grupo (mini-MC pareado só do grupo, sementes idênticas — sem ruído) ou, no mata-mata, a chance de <em>avanço</em> do vencedor (analítico). Sempre incondicional, ignora filtros.</div>
+                  <div style={{ fontSize: '10px', color: dm, marginBottom: '8px', lineHeight: 1.5, maxWidth: '760px' }}><strong style={{ color: tx }}>Surpresa</strong> em bits (−log₂ P; cada +1 bit = metade da chance), em duas medidas: <strong style={{ color: acc }}>placar</strong> = quão improvável era aquele placar exato; <strong style={{ color: bl }}>resultado</strong> = quão improvável era o desfecho 1X2 (quem venceu/empatou — a "zebra"). <strong style={{ color: tx }}>Impacto</strong> = quanto o resultado moveu a chance de <em>classificação</em> dos times do grupo (mini-MC pareado só do grupo, sementes idênticas — sem ruído) ou, no mata-mata, a chance de <em>avanço</em> do vencedor (analítico). Sempre incondicional, ignora filtros.</div>
                   {rows.length === 0 ? <div style={{ padding: '30px', textAlign: 'center', color: dm, fontSize: '11px' }}>Nenhum resultado preenchido — preencha na aba 📝 Resultados.</div> : <>
                     <div style={{ display: 'flex', gap: '6px', alignItems: 'center', marginBottom: '8px', flexWrap: 'wrap' }}>
                       <SB active={surSort === 'bits'} onClick={() => setSurSort('bits')}>↓ Surpresa</SB>
                       <SB active={surSort === 'impact'} onClick={() => setSurSort('impact')}>↓ Impacto</SB>
                       <span style={{ fontSize: '9px', color: dm }}>{rows.length} resultado(s)</span>
                     </div>
-                    <div style={{ display: 'grid', gridTemplateColumns: '34px 1fr 56px 56px 58px 116px 22px', gap: '4px', fontSize: '8px', color: dm, fontWeight: 600, padding: '0 8px 3px', maxWidth: '860px' }}>
-                      <span>#</span><span>Jogo</span><span style={{ textAlign: 'right' }} title="Prob. pré-jogo do desfecho 1X2 ocorrido (90')">P(1X2)</span><span style={{ textAlign: 'right' }} title="Prob. pré-jogo do placar exato (90')">P(placar)</span><span style={{ textAlign: 'right' }}>Surpresa</span><span style={{ textAlign: 'right' }} title="GS: Δ chance de classificação do time mais afetado do grupo. KO: Δ chance de avanço do vencedor (analítico).">Impacto classif.</span><span />
+                    <div style={{ display: 'grid', gridTemplateColumns: '34px 1fr 52px 52px 84px 116px 22px', gap: '4px', fontSize: '8px', color: dm, fontWeight: 600, padding: '0 8px 3px', maxWidth: '860px' }}>
+                      <span>#</span><span>Jogo</span><span style={{ textAlign: 'right' }} title="Prob. pré-jogo do desfecho 1X2 ocorrido (90')">P(1X2)</span><span style={{ textAlign: 'right' }} title="Prob. pré-jogo do placar exato (90')">P(placar)</span><span style={{ textAlign: 'right' }} title="Surpresa em bits: placar exato · resultado (1X2). Maior = mais raro.">Surpresa <span style={{ color: acc }}>placar</span>·<span style={{ color: bl }}>result.</span></span><span style={{ textAlign: 'right' }} title="GS: Δ chance de classificação do time mais afetado do grupo. KO: Δ chance de avanço do vencedor (analítico).">Impacto classif.</span><span />
                     </div>
                     <div style={{ maxWidth: '860px' }}>
                       {sorted.map((r, i) => {
@@ -2256,12 +2272,12 @@ export default function WC2026() {
                         const isExp = surExpand === r.key;
                         return (
                           <div key={r.key} style={{ background: i % 2 === 0 ? card : '#0d111d', borderRadius: '4px', marginBottom: '2px', padding: '4px 8px' }}>
-                            <div style={{ display: 'grid', gridTemplateColumns: '34px 1fr 56px 56px 58px 116px 22px', gap: '4px', alignItems: 'center', fontSize: '10px' }}>
+                            <div style={{ display: 'grid', gridTemplateColumns: '34px 1fr 52px 52px 84px 116px 22px', gap: '4px', alignItems: 'center', fontSize: '10px' }}>
                               <span style={{ color: dm, fontSize: '9px' }}>{r.label}</span>
                               <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}><span style={{ color: bl, fontSize: '8px', marginRight: '4px' }}>{r.fase}</span>{fl(r.h)} {nm(r.h)} <strong>{r.gA}×{r.gB}</strong> {fl(r.a)} {nm(r.a)}{r.tie && r.pw ? <span style={{ color: dm, fontSize: '8px' }}> (pên: {r.pw === 'B' ? nm(r.a) : nm(r.h)})</span> : ''}</span>
                               <span style={{ textAlign: 'right', color: dm }}>{(r.pOut * 100).toFixed(0)}%</span>
                               <span style={{ textAlign: 'right', color: dm }}>{(r.pExact * 100).toFixed(1)}%</span>
-                              <span style={{ textAlign: 'right', fontWeight: 700, color: r.bitsExact > 6 ? rd : r.bitsExact > 4.5 ? '#f97316' : acc }}>{r.bitsExact.toFixed(1)} bits</span>
+                              <span style={{ textAlign: 'right', fontWeight: 700 }} title={`placar ${r.bitsExact.toFixed(1)} bits (${(r.pExact * 100).toFixed(1)}%) · resultado ${r.bitsOut.toFixed(1)} bits (${(r.pOut * 100).toFixed(0)}%)`}><span style={{ color: r.bitsExact > 6 ? rd : r.bitsExact > 4.5 ? '#f97316' : acc }}>{r.bitsExact.toFixed(1)}</span><span style={{ color: dm, fontWeight: 400 }}> · </span><span style={{ color: r.bitsOut > 6 ? rd : r.bitsOut > 4.5 ? '#f97316' : bl }}>{r.bitsOut.toFixed(1)}</span></span>
                               {im ? <span style={{ textAlign: 'right', fontWeight: 700, color: r.mag > 15 ? rd : r.mag > 5 ? '#f97316' : dm }}>⚡ {im.type === 'ko' ? `${nm(im.winner)} +${im.dW.toFixed(1)}` : `${nm(im.headline.t)} ${im.headline.dAdv > 0 ? '+' : ''}${im.headline.dAdv.toFixed(1)}`} p.p.</span>
                                 : <span style={{ textAlign: 'right', color: dm }}>—</span>}
                               <button onClick={() => setSurExpand(isExp ? null : r.key)} disabled={!im} style={{ background: 'transparent', border: 'none', color: im ? acc : `${dm}55`, cursor: im ? 'pointer' : 'default', fontSize: '10px', padding: 0 }}>{isExp ? '▲' : '▼'}</button>
@@ -3796,7 +3812,7 @@ export default function WC2026() {
                               const qi = qualImpact('k' + m.mn);
                               return (
                                 <div style={{ marginTop: '3px', display: 'flex', gap: '10px', alignItems: 'center', justifyContent: 'center', fontSize: '9px', flexWrap: 'wrap' }}>
-                                  <span style={{ color: s.bitsExact > 6 ? rd : s.bitsExact > 4.5 ? '#f97316' : dm }} title="-log₂ da prob. pré-jogo do placar exato nos 90 minutos (pênaltis não entram)">🎯 surpresa {s.bitsExact.toFixed(1)} bits{tie ? " (90')" : ''} <span style={{ color: dm }}>(placar tinha {(s.pExact * 100).toFixed(1)}%, 1X2 tinha {(s.pOut * 100).toFixed(0)}%)</span></span>
+                                  <span title="Surpresa em bits (−log₂ da prob. pré-jogo, 90 min — pênaltis não entram). Placar = aquele placar exato; Resultado = o desfecho 1X2 (quem venceu/empatou, a 'zebra').">🎯 surpresa{tie ? " (90')" : ''} — <span style={{ color: s.bitsExact > 6 ? rd : s.bitsExact > 4.5 ? '#f97316' : acc, fontWeight: 700 }}>placar {s.bitsExact.toFixed(1)} bits</span> <span style={{ color: dm }}>({(s.pExact * 100).toFixed(1)}%)</span> · <span style={{ color: s.bitsOut > 6 ? rd : s.bitsOut > 4.5 ? '#f97316' : bl, fontWeight: 700 }}>resultado {s.bitsOut.toFixed(1)} bits</span> <span style={{ color: dm }}>({(s.pOut * 100).toFixed(0)}%)</span></span>
                                   {qi && <span style={{ color: qi.dW > 15 ? rd : qi.dW > 5 ? '#f97316' : dm }} title={`Chance de ${nm(qi.winner)} avançar ia de ${qi.pAdvW.toFixed(0)}% → 100% (analítico: 90' + prorrogação + pênaltis, espelha o modelo do torneio)`}>⚡ avança: {nm(qi.winner)} +{qi.dW.toFixed(1)} p.p.</span>}
                                 </div>
                               );
@@ -3881,7 +3897,7 @@ export default function WC2026() {
                           return (
                             <>
                               <div style={{ marginTop: '3px', display: 'flex', gap: '10px', alignItems: 'center', justifyContent: 'center', fontSize: '9px', flexWrap: 'wrap' }}>
-                                <span style={{ color: s.bitsExact > 6 ? rd : s.bitsExact > 4.5 ? '#f97316' : dm }} title="-log₂ da prob. pré-jogo do placar exato">🎯 surpresa {s.bitsExact.toFixed(1)} bits <span style={{ color: dm }}>(placar tinha {(s.pExact * 100).toFixed(1)}%, 1X2 tinha {(s.pOut * 100).toFixed(0)}%)</span></span>
+                                <span title="Surpresa em bits (−log₂ da prob. pré-jogo). Placar = aquele placar exato; Resultado = o desfecho 1X2 (quem venceu/empatou, a 'zebra').">🎯 surpresa — <span style={{ color: s.bitsExact > 6 ? rd : s.bitsExact > 4.5 ? '#f97316' : acc, fontWeight: 700 }}>placar {s.bitsExact.toFixed(1)} bits</span> <span style={{ color: dm }}>({(s.pExact * 100).toFixed(1)}%)</span> · <span style={{ color: s.bitsOut > 6 ? rd : s.bitsOut > 4.5 ? '#f97316' : bl, fontWeight: 700 }}>resultado {s.bitsOut.toFixed(1)} bits</span> <span style={{ color: dm }}>({(s.pOut * 100).toFixed(0)}%)</span></span>
                                 {qi && <span onClick={() => setClsOpen(open ? null : m.idx)} title="Clique para ver a expectativa de classificação dos times do grupo antes → depois deste resultado" style={{ color: Math.abs(qi.headline.dAdv) > 15 ? rd : Math.abs(qi.headline.dAdv) > 5 ? '#f97316' : dm, cursor: 'pointer', borderBottom: `1px dotted ${dm}` }}>⚡ classif.: {nm(qi.headline.t)} {qi.headline.dAdv > 0 ? '+' : ''}{qi.headline.dAdv.toFixed(1)} p.p. {open ? '▴' : '▾'}</span>}
                               </div>
                               {open && qi && classTable(m.idx, fx.gA, fx.gB, [m.home, m.away])}

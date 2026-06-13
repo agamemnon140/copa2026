@@ -32,6 +32,8 @@ const code = [
   grab('const rankGroup = (teams, tb, gm', 'return { sorted, crit };\n};'),
   grab('const groupPosProbs = (games, teams, gn', 'return counts;\n};'),
   grab('const koAdvProb = (a, b, tA, tB)', 'r90, ret, pen };\n};'),
+  grab('const mProbs = (a, b, tA', 'pA: pA / t * 100 }; };'),
+  grab('const surpriseOf = (eH, eA, tA, tB, gA, gB)', 'bitsOut: -Math.log2(Math.max(pOut, 1e-12)) };\n};'),
   grab('const liveProbs = (a, b, tA, tB,', 'scores, pOf };\n};'),
   grab('const evState = (ev, tau)', 'return st;\n};'),
   grab('const liveSeriesCalc = (eH, eA, tA, tB, ev, s1, s2,', 'return out;\n};'),
@@ -39,8 +41,8 @@ const code = [
   src.slice(src.indexOf('// === WCH:BEGIN'), src.indexOf('// === WCH:END ===')),
   grab('const wcH2H = (a, b)', 'return out;\n};'),
 ].join('\n');
-const { liveRemFrac, fmtClock, liveProbs, makeRnd, sP, cL, groupPosProbs, koAdvProb, evState, liveSeriesCalc, wcH2H, WCH, WCH_TEAMS, WCH_ST } =
-  eval(code + '\n;({ liveRemFrac, fmtClock, liveProbs, makeRnd, sP, cL, groupPosProbs, koAdvProb, evState, liveSeriesCalc, wcH2H, WCH, WCH_TEAMS, WCH_ST });');
+const { liveRemFrac, fmtClock, liveProbs, makeRnd, sP, cL, groupPosProbs, koAdvProb, evState, liveSeriesCalc, wcH2H, WCH, WCH_TEAMS, WCH_ST, surpriseOf, mProbs } =
+  eval(code + '\n;({ liveRemFrac, fmtClock, liveProbs, makeRnd, sP, cL, groupPosProbs, koAdvProb, evState, liveSeriesCalc, wcH2H, WCH, WCH_TEAMS, WCH_ST, surpriseOf, mProbs });');
 const FL_KEYS = new Set([...src.match(/const FL\s*=\s*\{([\s\S]*?)\};/)[1].matchAll(/'([^']+)'\s*:/g)].map(m2 => m2[1]));
 
 let fail = 0;
@@ -158,6 +160,16 @@ const SERT = liveSeriesCalc(1800, 1700, '', '', EV, 3, 6, undefined, { a: 0, b: 
 chk('liveSeriesCalc: pT presente com target', SERT.every(p => p.pT != null && p.pT >= 0 && p.pT <= 100));
 const atT = tau => SERT.find(p => p.tau === tau);
 chk('liveSeriesCalc: target 0–0 impossível após gol aos 23 → pT = 0', atT(22.99).pT > 0 && atT(23).pT === 0, `${atT(22.99).pT.toFixed(1)} → ${atT(23).pT}`);
+
+// surpriseOf — placar (exato) e resultado (1X2), ambos em bits
+const surp = surpriseOf(1850, 1500, '', '', 0, 4); // zebra: favorito (mandante forte) leva 0×4
+chk('surpriseOf: bitsExact = -log2(pExact)', Math.abs(surp.bitsExact + Math.log2(surp.pExact)) < 1e-9);
+chk('surpriseOf: bitsOut = -log2(pOut)', Math.abs(surp.bitsOut + Math.log2(surp.pOut)) < 1e-9);
+chk('surpriseOf: pOut bate com mProbs (vitória do visitante)', Math.abs(surp.pOut - mProbs(1850, 1500, '', '').pA / 100) < 1e-12);
+chk('surpriseOf: zebra → resultado surpreendente (bitsOut > 1)', surp.bitsOut > 1, surp.bitsOut.toFixed(2));
+chk('surpriseOf: placar mais raro que o resultado (bitsExact > bitsOut)', surp.bitsExact > surp.bitsOut, `${surp.bitsExact.toFixed(1)} vs ${surp.bitsOut.toFixed(1)}`);
+const surpDraw = surpriseOf(1700, 1700, '', '', 1, 1); // jogo equilibrado, empate
+chk('surpriseOf: empate provável → resultado pouco surpreendente', surpDraw.bitsOut < 3, surpDraw.bitsOut.toFixed(2));
 
 console.log(fail === 0 ? '\nTODOS OS TESTES PASSARAM' : `\n${fail} TESTE(S) FALHARAM`);
 process.exit(fail ? 1 : 0);

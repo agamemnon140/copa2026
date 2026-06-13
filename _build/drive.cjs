@@ -105,6 +105,9 @@ const fail = (name, detail) => { results.push({ s: '❌', name, detail }); conso
   if (/Chance de classificação no Grupo A com este jogo/.test(clsTxt) && /antes deste jogo → agora/.test(clsTxt) && /p\.p\./.test(clsTxt))
     ok('Painel "classificação antes → agora" no card ao vivo (4 times do grupo)');
   else fail('Painel de classificação ao vivo', clsTxt.match(/Chance de classificação[\s\S]{0,120}/)?.[0] || 'ausente');
+  if (/3º do grupo se classifica\s*\d+%\s*→\s*\d+%/.test(clsTxt.replace(/\n/g, ' ')))
+    ok('Linha-resumo "3º do grupo se classifica" antes→agora presente');
+  else fail('Linha do 3º do grupo', clsTxt.match(/3º do grupo[\s\S]{0,60}/)?.[0] || 'ausente (rode o MC?)');
 
   // hover: crosshair + tooltip com as chances no minuto
   const svgBox = await card.locator('svg').boundingBox();
@@ -163,10 +166,10 @@ const fail = (name, detail) => { results.push({ s: '❌', name, detail }); conso
   await setVal(scoreA, 0); await setVal(scoreB, 4);
   await page.waitForSelector('text=🎯 surpresa', { timeout: 5000 });
   t = await card.innerText();
-  const bits = t.match(/🎯 surpresa ([\d.]+) bits \(placar tinha ([\d.]+)%, 1X2 tinha (\d+)%\)/);
-  if (bits && +bits[1] > 6) ok('Zebra 0×4 → badge de surpresa alta', `${bits[1]} bits, placar tinha ${bits[2]}%`);
-  else if (bits) fail('Surpresa baixa demais para zebra 0×4', bits[1] + ' bits');
-  else fail('Badge 🎯 surpresa não apareceu');
+  const bits = t.match(/placar ([\d.]+) bits[^·]*·\s*resultado ([\d.]+) bits/);
+  if (bits && +bits[1] > 6 && +bits[2] > 0) ok('Zebra 0×4 → surpresa em 2 dimensões (placar + resultado)', `placar ${bits[1]} · resultado ${bits[2]} bits`);
+  else if (bits) fail('Surpresa em 2 dimensões com valores inesperados', `${bits[1]} / ${bits[2]}`);
+  else fail('Badge 🎯 surpresa (placar·resultado) não apareceu', t.match(/🎯[\s\S]{0,80}/)?.[0]);
 
   // Badge de impacto aparece AUTOMATICAMENTE (sem botão), instantâneo
   await page.waitForSelector('text=⚡ classif.', { timeout: 5000 });
@@ -383,10 +386,9 @@ const fail = (name, detail) => { results.push({ s: '❌', name, detail }); conso
   else fail('Resultado 0×4 não encontrado na lista', body.slice(0, 400));
   if (body.includes('Calcular impactos') || body.includes('calcular')) fail('Botões antigos de impacto ainda presentes na aba Surpresas');
   else ok('Sem botões "Calcular impactos"/"calcular" — impactos automáticos');
-  const nRows = (body.match(/bits/g) || []).length - 1; // header não tem "bits"; cada linha tem
   const nImps = (body.match(/⚡ /g) || []).length;
-  if (nImps >= nRows && nRows > 0) ok('Coluna Impacto preenchida em todas as linhas', `${nImps} ⚡ para ${nRows} linhas`);
-  else fail('Coluna Impacto incompleta', `${nImps} ⚡ para ${nRows} linhas`);
+  if (nImps > 0 && !/p\.p\.\s*—/.test(body)) ok('Coluna Impacto preenchida automaticamente em todas as linhas', `${nImps} impactos`);
+  else fail('Coluna Impacto incompleta', `${nImps} impactos`);
   // expande a primeira linha → tabela Δ1º/Δ2º/Δ3º/ΔAvança (GS) ou P(avançar) (KO)
   await page.locator('button', { hasText: '▼' }).first().click();
   await page.waitForTimeout(200);
