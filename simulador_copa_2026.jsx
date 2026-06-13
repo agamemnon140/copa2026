@@ -1033,6 +1033,7 @@ export default function WC2026() {
   const [liveInputs, setLiveInputs] = useState({}); // { [idx]: { tau, gA, gB, redsA, redsB, s1, s2, csA, csB, ev } }
   const [evForm, setEvForm] = useState({ t: 'g', s: 'A', m: '' }); // editor de evento minutado do card ao vivo aberto
   const [koHist, setKoHist] = useState(null); // mn do card KO com histórico de Copas aberto
+  const [clsOpen, setClsOpen] = useState(null); // idx do jogo GS com a tabela de classificação antes→agora aberta
   const [bracketSel, setBracketSel] = useState(null); // {type:'match',mn} | {type:'group',gn} | null — painel de detalhe do bracket
   const [surSort, setSurSort] = useState('bits'); // ordenação da aba Surpresas: 'bits' | 'impact'
   const [surExpand, setSurExpand] = useState(null); // resKey expandida (movers) na aba Surpresas
@@ -1169,6 +1170,20 @@ export default function WC2026() {
   const IMPACT_N = 10000, IMPACT_SEED = 0x5EED;
   // Map novo a cada mudança de inputs — useMemo roda DURANTE o render (sem frame stale).
   const impactCache = useMemo(() => new Map(), [userRes, injuries, rSys, customME, useTilt, favWeight, spread, homeAdv, pc, customElo]);
+  // Monta os 6 jogos de um grupo (Elo com cidade e lesões) sob um conjunto de resultados.
+  const mkGroupGames = (gn, teams, ur) => GS.map(([g, hi, ai, date, city], k) => {
+    if (g !== gn) return null;
+    const h = teams[hi], a = teams[ai], im = injuries[k] || {};
+    const fx = ur[k]?.gA != null && ur[k]?.gB != null ? { gA: ur[k].gA, gB: ur[k].gB } : null;
+    return { key: k, h, a, eH: efCity(h, city) - (im.h || 0) * INJ_ELO, eA: efCity(a, city) - (im.a || 0) * INJ_ELO, fx };
+  }).filter(Boolean);
+  // Mini-MC do grupo com cache por CENÁRIO (mesmos placares fixados → mesma entrada).
+  const runGroupCached = (gn, teams, games) => {
+    const ck = gn + '|' + games.map(g => g.fx ? `${g.key}:${g.fx.gA}-${g.fx.gB}` : g.key).join(';');
+    if (!impactCache.has(ck)) impactCache.set(ck, groupPosProbs(games, teams, gn, IMPACT_N, IMPACT_SEED));
+    return impactCache.get(ck);
+  };
+  const qP3 = (gn) => g3p?.[gn] != null ? g3p[gn] / 100 : 8 / 12; // P(3º do grupo avançar) — leitura, cache independe do MC
   const qualImpact = (resKey) => {
     _rSys = rSys; _customElo = customElo; _ME = customME; _useTilt = useTilt; _fav = favWeight; _spread = spread; _injM = injuries; _hb = homeAdv;
     if (String(resKey).startsWith('k')) {
@@ -1183,26 +1198,55 @@ export default function WC2026() {
     }
     const idx = +resKey, gn = GS[idx][0], teams = groups[gn];
     if (userRes[idx]?.gA == null || userRes[idx]?.gB == null) return null;
-    const mkGames = (ur) => GS.map(([g, hi, ai, date, city], k) => {
-      if (g !== gn) return null;
-      const h = teams[hi], a = teams[ai], im = injuries[k] || {};
-      const fx = ur[k]?.gA != null && ur[k]?.gB != null ? { gA: ur[k].gA, gB: ur[k].gB } : null;
-      return { key: k, h, a, eH: efCity(h, city) - (im.h || 0) * INJ_ELO, eA: efCity(a, city) - (im.a || 0) * INJ_ELO, fx };
-    }).filter(Boolean);
-    const run = (games) => { // cache por CENÁRIO: o lado COM é compartilhado por todos os jogos do grupo
-      const ck = gn + '|' + games.map(g => g.fx ? `${g.key}:${g.fx.gA}-${g.fx.gB}` : g.key).join(';');
-      if (!impactCache.has(ck)) impactCache.set(ck, groupPosProbs(games, teams, gn, IMPACT_N, IMPACT_SEED));
-      return impactCache.get(ck);
-    };
-    const wC = run(mkGames(userRes));
+    const wC = runGroupCached(gn, teams, mkGroupGames(gn, teams, userRes));
     const urMinus = { ...userRes }; delete urMinus[idx];
-    const oC = run(mkGames(urMinus));
-    const q = g3p?.[gn] != null ? g3p[gn] / 100 : 8 / 12; // P(3º avança) — aplicado na leitura, cache independe do MC
+    const oC = runGroupCached(gn, teams, mkGroupGames(gn, teams, urMinus));
+    const q = qP3(gn);
     const movers = teams.map(t => {
       const d = [0, 1, 2, 3].map(p => (wC[t][p] - oC[t][p]) / IMPACT_N * 100);
       return { t, dP1: d[0], dP2: d[1], dP3: d[2], dP4: d[3], dAdv: d[0] + d[1] + q * d[2] };
     }).sort((x, y) => Math.abs(y.dAdv) - Math.abs(x.dAdv));
     return { type: 'gs', gn, q, n: IMPACT_N, movers, headline: movers[0] };
+  };
+  // Expectativa de classificação dos times do grupo ANTES do jogo idx vs SE ELE TERMINAR gA×gB.
+  // Usado no card ao vivo (placar corrente). "Antes" = demais resultados do grupo mantidos, este jogo livre.
+  const qualShift = (idx, gA, gB) => {
+    _rSys = rSys; _customElo = customElo; _ME = customME; _useTilt = useTilt; _fav = favWeight; _spread = spread; _injM = injuries; _hb = homeAdv;
+    const gn = GS[idx][0], teams = groups[gn];
+    const urMinus = { ...userRes }; delete urMinus[idx];
+    const oC = runGroupCached(gn, teams, mkGroupGames(gn, teams, urMinus));
+    const wC = runGroupCached(gn, teams, mkGroupGames(gn, teams, { ...urMinus, [idx]: { gA, gB } }));
+    const q = qP3(gn);
+    const adv = (c, t) => (c[t][0] + c[t][1] + q * c[t][2]) / IMPACT_N * 100;
+    return { gn, q, rows: teams.map(t => ({ t, before: adv(oC, t), after: adv(wC, t) })) };
+  };
+  // Tabela "expectativa de classificação antes → agora" dos 4 times do grupo, dado que
+  // o jogo idx termina gA×gB. highlight = times a destacar (os que jogaram). Reusada
+  // no card ao vivo (placar corrente) e no card de jogo já finalizado (placar fixado).
+  const classTable = (idx, gA, gB, highlight) => {
+    const sh = qualShift(idx, gA, gB);
+    const ordered = sh.rows.slice().sort((x, y) => y.after - x.after);
+    return (
+      <div style={{ marginTop: '6px', padding: '6px 8px', background: card, borderRadius: '4px', border: `1px solid ${bd}` }}>
+        <div style={{ fontSize: '8px', color: dm, marginBottom: '4px' }}>Chance de classificação no Grupo {sh.gn} com este jogo <strong style={{ color: tx }}>{gA}–{gB}</strong> (antes deste jogo → agora). Inclui a repescagem dos 3ºs (q = {(sh.q * 100).toFixed(0)}%).</div>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 52px 14px 52px 56px', gap: '4px', fontSize: '8px', color: dm, fontWeight: 600, padding: '0 0 2px', borderBottom: `1px solid ${bd}` }}>
+          <span>Time</span><span style={{ textAlign: 'right' }}>antes</span><span /><span style={{ textAlign: 'right' }}>agora</span><span style={{ textAlign: 'right' }}>Δ</span>
+        </div>
+        {ordered.map(r => {
+          const on = highlight.includes(r.t);
+          const d = r.after - r.before;
+          return (
+            <div key={r.t} style={{ display: 'grid', gridTemplateColumns: '1fr 52px 14px 52px 56px', gap: '4px', alignItems: 'center', fontSize: '10px', padding: '1px 0', opacity: on ? 1 : 0.6 }}>
+              <span style={{ fontWeight: on ? 700 : 400, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{fl(r.t)} {nm(r.t)}</span>
+              <span style={{ textAlign: 'right', color: dm }}>{r.before.toFixed(0)}%</span>
+              <span style={{ textAlign: 'center', color: dm }}>→</span>
+              <span style={{ textAlign: 'right', fontWeight: 700, color: r.after > 60 ? gn : r.after > 30 ? acc : tx }}>{r.after.toFixed(0)}%</span>
+              <span style={{ textAlign: 'right', fontWeight: 700, color: d > 0.5 ? gn : d < -0.5 ? rd : dm }}>{d > 0 ? '+' : ''}{d.toFixed(0)} p.p.</span>
+            </div>
+          );
+        })}
+      </div>
+    );
   };
 
   // Série do gráfico de evolução ao vivo — memoizada pelos CAMPOS dos eventos/placar/acréscimos:
@@ -3833,11 +3877,15 @@ export default function WC2026() {
                         {hasFx && (() => {
                           const s = surpriseOf(_eH, _eA, m.home, m.away, fx.gA, fx.gB);
                           const qi = qualImpact(String(m.idx));
+                          const open = clsOpen === m.idx;
                           return (
-                            <div style={{ marginTop: '3px', display: 'flex', gap: '10px', alignItems: 'center', justifyContent: 'center', fontSize: '9px', flexWrap: 'wrap' }}>
-                              <span style={{ color: s.bitsExact > 6 ? rd : s.bitsExact > 4.5 ? '#f97316' : dm }} title="-log₂ da prob. pré-jogo do placar exato">🎯 surpresa {s.bitsExact.toFixed(1)} bits <span style={{ color: dm }}>(placar tinha {(s.pExact * 100).toFixed(1)}%, 1X2 tinha {(s.pOut * 100).toFixed(0)}%)</span></span>
-                              {qi && <span style={{ color: Math.abs(qi.headline.dAdv) > 15 ? rd : Math.abs(qi.headline.dAdv) > 5 ? '#f97316' : dm }} title={`Δ chance de classificação (P(1º)+P(2º)+${(qi.q * 100).toFixed(0)}%·P(3º)) dos times do grupo ${qi.gn}, com vs sem este placar — ${qi.n.toLocaleString()} pares de mini-sims do grupo com sementes idênticas; maior mover exibido`}>⚡ classif.: {nm(qi.headline.t)} {qi.headline.dAdv > 0 ? '+' : ''}{qi.headline.dAdv.toFixed(1)} p.p.</span>}
-                            </div>
+                            <>
+                              <div style={{ marginTop: '3px', display: 'flex', gap: '10px', alignItems: 'center', justifyContent: 'center', fontSize: '9px', flexWrap: 'wrap' }}>
+                                <span style={{ color: s.bitsExact > 6 ? rd : s.bitsExact > 4.5 ? '#f97316' : dm }} title="-log₂ da prob. pré-jogo do placar exato">🎯 surpresa {s.bitsExact.toFixed(1)} bits <span style={{ color: dm }}>(placar tinha {(s.pExact * 100).toFixed(1)}%, 1X2 tinha {(s.pOut * 100).toFixed(0)}%)</span></span>
+                                {qi && <span onClick={() => setClsOpen(open ? null : m.idx)} title="Clique para ver a expectativa de classificação dos times do grupo antes → depois deste resultado" style={{ color: Math.abs(qi.headline.dAdv) > 15 ? rd : Math.abs(qi.headline.dAdv) > 5 ? '#f97316' : dm, cursor: 'pointer', borderBottom: `1px dotted ${dm}` }}>⚡ classif.: {nm(qi.headline.t)} {qi.headline.dAdv > 0 ? '+' : ''}{qi.headline.dAdv.toFixed(1)} p.p. {open ? '▴' : '▾'}</span>}
+                              </div>
+                              {open && qi && classTable(m.idx, fx.gA, fx.gB, [m.home, m.away])}
+                            </>
                           );
                         })()}
                         {isLive && (
@@ -4002,6 +4050,8 @@ export default function WC2026() {
                               );
                             })()}
                             <div style={{ fontSize: '9px', color: dm, textAlign: 'center' }}>Placar final esperado: <strong style={{ color: tx }}>{liveP.expScoreA.toFixed(1)} - {liveP.expScoreB.toFixed(1)}</strong> • λ restante: {liveP.laR.toFixed(2)}/{liveP.lbR.toFixed(2)} gols</div>
+                            {/* Como o placar atual move a expectativa de classificação dos times do grupo */}
+                            {classTable(m.idx, liSt.gA, liSt.gB, [m.home, m.away])}
                             <div style={{ fontSize: '8px', color: dm, marginTop: '4px', textAlign: 'center', fontStyle: 'italic' }}>Modelo: a intensidade de gols cresce ao longo do jogo (~{Math.round(LIVE_F2 * 100)}% dos gols no 2º tempo) e os acréscimos jogam com a intensidade do fim de cada tempo; o total esperado da partida é preservado. Cada vermelho: 0.78× ao infrator, 1.12× ao adversário.</div>
                           </div>
                         )}

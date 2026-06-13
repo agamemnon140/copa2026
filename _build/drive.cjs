@@ -100,6 +100,12 @@ const fail = (name, detail) => { results.push({ s: '❌', name, detail }); conso
   const svgTxt = await card.locator('svg').textContent();
   if (nPaths0 >= 4 && svgTxt.includes('P(2–0)')) ok('Gráfico abre sem eventos e inclui a linha do placar de interesse P(2–0)', nPaths0 + ' paths');
   else fail('Gráfico baseline/target', `${nPaths0} paths; legenda: ${svgTxt.slice(0, 80)}`);
+  // expectativa de classificação antes → agora (placar corrente) no card ao vivo
+  const clsTxt = await liveTxt();
+  if (/Chance de classificação no Grupo A com este jogo/.test(clsTxt) && /antes deste jogo → agora/.test(clsTxt) && /p\.p\./.test(clsTxt))
+    ok('Painel "classificação antes → agora" no card ao vivo (4 times do grupo)');
+  else fail('Painel de classificação ao vivo', clsTxt.match(/Chance de classificação[\s\S]{0,120}/)?.[0] || 'ausente');
+
   // hover: crosshair + tooltip com as chances no minuto
   const svgBox = await card.locator('svg').boundingBox();
   await page.mouse.move(svgBox.x + svgBox.width * 0.5, svgBox.y + svgBox.height * 0.5);
@@ -170,6 +176,13 @@ const fail = (name, detail) => { results.push({ s: '❌', name, detail }); conso
   else if (imp) fail('Impacto da zebra pequeno demais', `${imp[1]} ${imp[2]} p.p.`);
   else fail('Badge ⚡ classif. não apareceu');
   if (t.includes('⚡ impacto') || t.includes('calculando')) fail('Botão/spinner antigos ainda presentes');
+  // badge ⚡ classif. é clicável → expande a tabela classificação antes→agora do jogo finalizado
+  await card.locator('span', { hasText: /⚡ classif\.: .+ ▾/ }).click();
+  await page.waitForTimeout(200);
+  t = await card.innerText();
+  if (/Chance de classificação no Grupo A com este jogo 0–4/.test(t)) ok('Badge ⚡ classif. expande tabela antes→agora (jogo 0×4 finalizado)');
+  else fail('Expansão do badge classif.', t.match(/⚡ classif[\s\S]{0,80}/)?.[0]);
+  await card.locator('span', { hasText: /⚡ classif\.: .+ ▴/ }).click(); // fecha
   await page.screenshot({ path: path.join(SHOTS, '2-badges.png') });
 
   // Determinismo: sair da aba e voltar → badge idêntico (seed fixa, cache por cenário)
