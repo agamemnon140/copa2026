@@ -1039,6 +1039,7 @@ export default function WC2026() {
   const [koHist, setKoHist] = useState(null); // mn do card KO com histórico de Copas aberto
   const [clsOpen, setClsOpen] = useState(null); // idx do jogo GS com a tabela de classificação antes→agora aberta
   const [clsMetric, setClsMetric] = useState('class'); // métrica observada na tabela de impacto: class|p1..p4|pts|gf|gd
+  const [preOpen, setPreOpen] = useState(null); // idx do jogo GS (ainda sem placar) com o "E se?" pré-jogo aberto
   const [bracketSel, setBracketSel] = useState(null); // {type:'match',mn} | {type:'group',gn} | null — painel de detalhe do bracket
   const [surSort, setSurSort] = useState('bits'); // ordenação da aba Surpresas: 'bits' | 'impact'
   const [surExpand, setSurExpand] = useState(null); // resKey expandida (movers) na aba Surpresas
@@ -1050,6 +1051,10 @@ export default function WC2026() {
   const [bsLoading, setBsLoading] = useState(false);
   const [evoLoading, setEvoLoading] = useState(false);
   const [evoFilterTeam, setEvoFilterTeam] = useState(''); // '' = todos os jogos; nome do time = só jogos dele
+  const [evoGrp, setEvoGrp] = useState('A'); // grupo da tabela de evolução (Cruzamentos▸Evolução)
+  const [evoTblMetric, setEvoTblMetric] = useState('adv'); // métrica da tabela de evolução
+  const [evoTbl, setEvoTbl] = useState(null); // { gn, sims, teams, snaps:[{label,idx,probs}] }
+  const [evoTblLoading, setEvoTblLoading] = useState(false);
   const [tpcData, setTpcData] = useState(null); // position-conditioned matchups
   const [matchByG3Data, setMatchByG3Data] = useState(null); // g3-filtered match data
   const [matchChampData, setMatchChampData] = useState(null);
@@ -1289,6 +1294,64 @@ export default function WC2026() {
         })()}
       </div>
     );
+  };
+  // Pré-jogo (jogo ainda sem placar): impacto POTENCIAL de cada desfecho na classificação
+  // dos dois times — agora → se V mandante (1–0) / empate (1–1) / V visitante (0–1).
+  const preGamePreview = (idx, home, away) => {
+    const fn = IMPACT_METRICS.class.fn;
+    const sc = { h: qualShift(idx, 1, 0), d: qualShift(idx, 1, 1), a: qualShift(idx, 0, 1) };
+    const rowsH = sc.h.rowsFor(fn); // "antes" é idêntico nos três (mesmo urMinus)
+    const before = t => (rowsH.find(r => r.t === t) || {}).before || 0;
+    const after = (k, t) => (sc[k].rowsFor(fn).find(r => r.t === t) || {}).after || 0;
+    const cols = [['h', `V ${nm(home).slice(0, 3).toUpperCase()}`, '1–0', gn], ['d', 'Empate', '1–1', dm], ['a', `V ${nm(away).slice(0, 3).toUpperCase()}`, '0–1', bl]];
+    return (
+      <div style={{ marginTop: '4px', padding: '6px 8px', background: card, borderRadius: '4px', border: `1px solid ${bd}` }}>
+        <div style={{ fontSize: '8px', color: dm, marginBottom: '4px' }}>🔮 Impacto potencial na <strong style={{ color: tx }}>classificação</strong> (Grupo {sc.h.gn}) — agora → se o jogo terminar em cada desfecho (placar representativo).</div>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 46px 64px 64px 64px', gap: '4px', fontSize: '8px', color: dm, fontWeight: 600, padding: '0 0 2px', borderBottom: `1px solid ${bd}` }}>
+          <span>Time</span><span style={{ textAlign: 'right' }}>agora</span>{cols.map(([k, lbl, , c]) => <span key={k} style={{ textAlign: 'right', color: c }} title={`placar representativo ${cols.find(x => x[0] === k)[2]}`}>{lbl}</span>)}
+        </div>
+        {[home, away].map(t => (
+          <div key={t} style={{ display: 'grid', gridTemplateColumns: '1fr 46px 64px 64px 64px', gap: '4px', alignItems: 'center', fontSize: '10px', padding: '1px 0' }}>
+            <span style={{ fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{fl(t)} {nm(t)}</span>
+            <span style={{ textAlign: 'right', color: dm }}>{before(t).toFixed(0)}%</span>
+            {cols.map(([k]) => { const a = after(k, t), d = a - before(t); return (
+              <span key={k} style={{ textAlign: 'right', fontWeight: 700, color: a > 60 ? gn : a > 30 ? acc : tx }}>{a.toFixed(0)}% <span style={{ fontSize: '8px', fontWeight: 600, color: d > 0.5 ? gn : d < -0.5 ? rd : dm }}>{d > 0 ? '+' : ''}{d.toFixed(0)}</span></span>
+            ); })}
+          </div>
+        ))}
+      </div>
+    );
+  };
+
+  // Tabela de evolução por grupo (Cruzamentos▸Evolução): roda o MC completo em snapshots,
+  // adicionando os jogos do grupo um a um (demais resultados mantidos), e registra por time
+  // as chances de posição (1º..4º, avança) e de fase do mata-mata (R16..Campeão).
+  const EVO_METRICS = [['adv', 'Avança'], ['p1', '1º'], ['p2', '2º'], ['p3', '3º'], ['p4', '4º'], ['r16', 'R16'], ['qf', 'QF'], ['sf', 'SF'], ['fin', 'Final'], ['ch', 'Campeão']];
+  const computeGroupEvo = (gnArg) => {
+    setEvoTblLoading(true);
+    setTimeout(() => {
+      try {
+        _rSys = rSys; _customElo = customElo; _ME = customME; _useTilt = useTilt; _fav = favWeight; _spread = spread; _injM = injuries; _hb = homeAdv;
+        const gIdxs = [];
+        GS.forEach((row, i) => { if (row[0] === gnArg) gIdxs.push(i); });
+        gIdxs.sort((a, b) => dateKey(GS[a][3]) - dateKey(GS[b][3]) || GS_BRT[a].localeCompare(GS_BRT[b]));
+        const filled = gIdxs.filter(i => userRes[i]?.gA != null && userRes[i]?.gB != null);
+        const base = { ...userRes }; gIdxs.forEach(i => delete base[i]); // tira os jogos do grupo; adiciona um a um
+        const snaps = [{ label: 'Início', idx: null, ur: { ...base } }];
+        let acc = { ...base };
+        filled.forEach((i) => { acc = { ...acc, [i]: userRes[i] }; snaps.push({ label: 'M' + (i + 1), idx: i, ur: { ...acc } }); });
+        const sims = Math.max(500, Math.min(3000, Math.floor((+nSim || 10000) / 3)));
+        const teams = groups[gnArg];
+        const data = snaps.map(s => {
+          const r = runMC(groups, sims, s.ur, []);
+          const probs = {};
+          teams.forEach(t => { const p = r.p[t] || {}; probs[t] = { adv: (p.g1 || 0) + (p.g2 || 0) + (p.g3a || 0), p1: p.g1 || 0, p2: p.g2 || 0, p3: (p.g3a || 0) + (p.g3o || 0), p4: p.g4 || 0, r16: p.r16 || 0, qf: p.qf || 0, sf: p.sf || 0, fin: p.fin || 0, ch: p.ch || 0 }; });
+          return { label: s.label, idx: s.idx, probs };
+        });
+        setEvoTbl({ gn: gnArg, sims, teams, snaps: data });
+      } catch (e) { /* mantém tabela anterior */ }
+      setEvoTblLoading(false);
+    }, 30);
   };
 
   // Série do gráfico de evolução ao vivo — memoizada pelos CAMPOS dos eventos/placar/acréscimos:
@@ -2249,7 +2312,55 @@ export default function WC2026() {
               <SB active={muView === 'tie'} onClick={() => setMuView('tie')}>Desempate</SB>
               <SB active={muView === 'path'} onClick={() => setMuView('path')}>Path</SB>
               <SB active={muView === 'surpresas'} onClick={() => setMuView('surpresas')}>Surpresas</SB>
+              <SB active={muView === 'evolucao'} onClick={() => setMuView('evolucao')}>Evolução</SB>
             </div>
+
+            {muView === 'evolucao' && (() => {
+              const teamsG = groups[evoGrp];
+              const ready = evoTbl && evoTbl.gn === evoGrp;
+              const M = evoTblMetric;
+              return (
+                <div>
+                  <div style={{ fontSize: '12px', fontWeight: 700, color: bl, marginBottom: '4px' }}>📈 Evolução do grupo jogo a jogo</div>
+                  <div style={{ fontSize: '10px', color: dm, marginBottom: '8px', lineHeight: 1.5, maxWidth: '760px' }}>Como as chances de cada time do grupo mudam à medida que os jogos <strong style={{ color: tx }}>preenchidos</strong> daquele grupo vão acontecendo (demais resultados mantidos). Cada coluna roda um Monte Carlo completo, então cobre tanto a posição no grupo (1º–4º, avança) quanto as fases do mata-mata (R16…Campeão).</div>
+                  <div style={{ display: 'flex', gap: '3px', alignItems: 'center', marginBottom: '6px', flexWrap: 'wrap' }}>
+                    <span style={{ fontSize: '10px', color: dm }}>Grupo:</span>
+                    {Object.keys(groups).map(g => <SB key={g} active={evoGrp === g} onClick={() => setEvoGrp(g)}>{g}</SB>)}
+                  </div>
+                  <div style={{ display: 'flex', gap: '3px', alignItems: 'center', marginBottom: '8px', flexWrap: 'wrap' }}>
+                    <span style={{ fontSize: '10px', color: dm }}>Métrica:</span>
+                    {EVO_METRICS.map(([k, l]) => <button key={k} onClick={() => setEvoTblMetric(k)} style={{ padding: '2px 7px', fontSize: '10px', fontWeight: M === k ? 700 : 400, background: M === k ? `${acc}33` : 'transparent', color: M === k ? acc : dm, border: `1px solid ${M === k ? acc : bd}`, borderRadius: '4px', cursor: 'pointer' }}>{l}</button>)}
+                    <button onClick={() => computeGroupEvo(evoGrp)} disabled={evoTblLoading} style={{ marginLeft: '6px', padding: '4px 10px', fontSize: '10px', fontWeight: 700, color: '#000', background: acc, border: 'none', borderRadius: '4px', cursor: evoTblLoading ? 'wait' : 'pointer' }}>{evoTblLoading ? '⏳ calculando…' : ready ? '↻ recalcular' : `📊 calcular Grupo ${evoGrp}`}</button>
+                  </div>
+                  {!ready ? <div style={{ padding: '24px', textAlign: 'center', color: dm, fontSize: '11px' }}>{evoTblLoading ? 'Rodando snapshots…' : `Clique em "calcular Grupo ${evoGrp}" para ver a evolução.`}</div> : (() => {
+                    const snaps = evoTbl.snaps;
+                    const mLabel = EVO_METRICS.find(([k]) => k === M)?.[1] || M;
+                    return (
+                      <div style={{ overflowX: 'auto', maxWidth: '100%' }}>
+                        <div style={{ fontSize: '9px', color: dm, marginBottom: '4px' }}>Grupo {evoTbl.gn} • métrica: <strong style={{ color: acc }}>{mLabel}</strong> (% por time) • {evoTbl.sims.toLocaleString()} sims/coluna • {snaps.length} coluna(s){snaps.length === 1 ? ' — preencha jogos deste grupo para ver a evolução' : ''}</div>
+                        <table style={{ borderCollapse: 'collapse', fontSize: '11px', minWidth: '320px' }}>
+                          <thead><tr>
+                            <th style={{ textAlign: 'left', padding: '4px 8px', color: dm, fontSize: '9px', fontWeight: 600, borderBottom: `1px solid ${bd}`, position: 'sticky', left: 0, background: card }}>Time</th>
+                            {snaps.map((s, i) => {
+                              const sub = s.idx != null ? `${nm(groups[GS[s.idx][0]][GS[s.idx][1]]).slice(0, 3)}×${nm(groups[GS[s.idx][0]][GS[s.idx][2]]).slice(0, 3)}` : 'pré';
+                              return <th key={i} title={s.idx != null ? `${GS[s.idx][3]} • ${nm(groups[GS[s.idx][0]][GS[s.idx][1]])} × ${nm(groups[GS[s.idx][0]][GS[s.idx][2]])}` : 'antes de qualquer jogo do grupo'} style={{ textAlign: 'right', padding: '4px 8px', color: dm, fontSize: '9px', fontWeight: 600, borderBottom: `1px solid ${bd}`, minWidth: '48px' }}>{s.label}<div style={{ fontSize: '7px', color: `${dm}aa`, fontWeight: 400 }}>{sub}</div></th>;
+                            })}
+                          </tr></thead>
+                          <tbody>{teamsG.map(t => (
+                            <tr key={t}>
+                              <td style={{ padding: '3px 8px', fontWeight: 600, whiteSpace: 'nowrap', position: 'sticky', left: 0, background: card }}>{fl(t)} {nm(t)}</td>
+                              {snaps.map((s, i) => (
+                                <td key={i} style={{ padding: '3px 8px', textAlign: 'right', fontWeight: 700, color: tx }}>{(s.probs[t]?.[M] ?? 0).toFixed(0)}%</td>
+                              ))}
+                            </tr>
+                          ))}</tbody>
+                        </table>
+                      </div>
+                    );
+                  })()}
+                </div>
+              );
+            })()}
 
             {muView === 'surpresas' && (() => {
               // Coleta todos os resultados preenchidos (GS + KO) com surpresa analítica pré-jogo.
@@ -3989,6 +4100,15 @@ export default function WC2026() {
                               </div>
                               {open && qi && classTable(m.idx, fx.gA, fx.gB, [m.home, m.away])}
                             </>
+                          );
+                        })()}
+                        {!hasFx && (() => {
+                          const open = preOpen === m.idx;
+                          return (
+                            <div style={{ marginTop: '3px', textAlign: 'center' }}>
+                              <span onClick={() => setPreOpen(open ? null : m.idx)} title="Antes do jogo: quanto cada desfecho (vitória/empate) mudaria a classificação dos dois times" style={{ fontSize: '9px', color: dm, cursor: 'pointer', borderBottom: `1px dotted ${dm}` }}>🔮 impacto potencial de cada desfecho {open ? '▴' : '▾'}</span>
+                              {open && preGamePreview(m.idx, m.home, m.away)}
+                            </div>
                           );
                         })()}
                         {isLive && (

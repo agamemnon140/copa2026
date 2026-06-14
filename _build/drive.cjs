@@ -280,6 +280,24 @@ const fail = (name, detail) => { results.push({ s: '❌', name, detail }); conso
   await page.click('text=📝 Resultados');
   await page.waitForTimeout(200);
 
+  /* ───── B3b. Impacto pré-jogo (jogo sem placar) ───── */
+  // o 2º jogo do Grupo A (México×... ainda sem placar nesta altura? na verdade A já foi preenchido).
+  // Usa um card de grupo SEM placar: vamos a um grupo não preenchido (ex.: Grupo E).
+  await page.locator('button', { hasText: /^E$/ }).first().click(); // filtro de grupo E (todos sem placar)
+  await page.waitForTimeout(200);
+  const preToggle = page.locator('text=🔮 impacto potencial de cada desfecho').first();
+  if (await preToggle.count()) {
+    await preToggle.click();
+    await page.waitForTimeout(300);
+    const preBody = await page.locator('body').innerText();
+    if (/Impacto potencial na classificação/.test(preBody) && /V \w+/.test(preBody) && /Empate/.test(preBody) && /→ se o jogo terminar/.test(preBody))
+      ok('Impacto pré-jogo: classificação dos 2 times sob V-A / Empate / V-B');
+    else fail('Impacto pré-jogo', preBody.match(/Impacto potencial[\s\S]{0,120}/)?.[0] || 'painel ausente');
+    await preToggle.click(); // fecha
+  } else fail('Toggle "🔮 impacto potencial" não encontrado em jogo sem placar');
+  await page.locator('button', { hasText: /^Todos$/ }).click();
+  await page.waitForTimeout(150);
+
   /* ───── B4. Filtro por grupo na aba Resultados ───── */
   await page.locator('button', { hasText: /^C$/ }).first().click();
   await page.waitForTimeout(200);
@@ -436,6 +454,24 @@ const fail = (name, detail) => { results.push({ s: '❌', name, detail }); conso
   await page.waitForTimeout(200);
   probe('Ordenação ↓ Impacto aplicada sem erro');
   await page.screenshot({ path: path.join(SHOTS, '6-surpresas.png') });
+
+  /* ───── E2. Cruzamentos ▸ Evolução (tabela por grupo) ───── */
+  await page.locator('button', { hasText: /^Evolução$/ }).click(); // sub-aba (a aba principal é "📈 Evolução")
+  await page.waitForTimeout(300);
+  // Grupo A já tem 6 jogos preenchidos pelo driver → várias colunas
+  await page.locator('button', { hasText: 'calcular Grupo A' }).click();
+  await page.waitForFunction(() => /sims\/coluna/.test(document.body.innerText), null, { timeout: 60000 });
+  let evoBody = await page.locator('body').innerText();
+  if (/Evolução do grupo jogo a jogo/.test(evoBody) && /sims\/coluna/.test(evoBody) && /coluna/.test(evoBody))
+    ok('Cruzamentos▸Evolução: tabela do Grupo A calculada (colunas = jogos do grupo)', evoBody.match(/(\d+) coluna/)?.[0]);
+  else fail('Sub-aba Evolução', evoBody.match(/Grupo A[\s\S]{0,80}/)?.[0] || 'tabela ausente');
+  // troca a métrica para Campeão (deve re-renderizar sem recalcular)
+  await page.locator('button', { hasText: /^Campeão$/ }).click();
+  await page.waitForTimeout(200);
+  evoBody = await page.locator('body').innerText();
+  if (/métrica:\s*Campeão/.test(evoBody)) probe('Métrica "Campeão" troca a tabela de evolução (fases do mata-mata)');
+  else fail('Troca de métrica na Evolução', evoBody.match(/métrica:[\s\S]{0,30}/)?.[0]);
+  await page.screenshot({ path: path.join(SHOTS, '8-evolucao.png') });
 
   /* ───── F. MC em blocos: progresso, conclusão e cancelamento ───── */
   const nSimSel = page.locator('select').first(); // select do nº de sims na barra superior
