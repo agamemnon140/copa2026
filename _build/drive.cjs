@@ -102,7 +102,7 @@ const fail = (name, detail) => { results.push({ s: '❌', name, detail }); conso
   else fail('Gráfico baseline/target', `${nPaths0} paths; legenda: ${svgTxt.slice(0, 80)}`);
   // expectativa de classificação antes → agora (placar corrente) no card ao vivo
   const clsTxt = await liveTxt();
-  if (/Chance de classificação no Grupo A com este jogo/.test(clsTxt) && /antes deste jogo → agora/.test(clsTxt) && /p\.p\./.test(clsTxt))
+  if (/Chance de classificação.*no Grupo A com este jogo/.test(clsTxt.replace(/\n/g, ' ')) && /antes deste jogo → agora/.test(clsTxt) && /p\.p\./.test(clsTxt))
     ok('Painel "classificação antes → agora" no card ao vivo (4 times do grupo)');
   else fail('Painel de classificação ao vivo', clsTxt.match(/Chance de classificação[\s\S]{0,120}/)?.[0] || 'ausente');
   if (/3º do grupo se classifica\s*\d+%\s*→\s*\d+%/.test(clsTxt.replace(/\n/g, ' ')))
@@ -156,6 +156,20 @@ const fail = (name, detail) => { results.push({ s: '❌', name, detail }); conso
   if (nPaths2 >= 3 && golsEnabled) probe('"limpar" remove eventos → gráfico permanece (baseline), inputs reabilitados');
   else fail('Limpeza de eventos', `${nPaths2} paths, enabled=${golsEnabled}`);
 
+  /* ───── A2b. Seletor de métrica no impacto (classTable) ───── */
+  // muda de "Classificar" para "Gols marcados" e confirma que a tabela troca a métrica
+  await card.locator('button', { hasText: /^Gols marcados$/ }).click();
+  await page.waitForTimeout(200);
+  t = await liveTxt();
+  if (/Expectativa de gols marcados no Grupo A/.test(t) && /gols/.test(t)) ok('Seletor de métrica: "Gols marcados" troca a tabela de impacto');
+  else fail('Seletor de métrica (gols)', t.match(/Expectativa[\s\S]{0,60}/)?.[0] || 'não trocou');
+  await card.locator('button', { hasText: /^1º lugar$/ }).click();
+  await page.waitForTimeout(150);
+  t = await liveTxt();
+  if (/Chance de terminar em 1º lugar/.test(t)) probe('Métrica "1º lugar" disponível');
+  await card.locator('button', { hasText: /^Classificar$/ }).click(); // volta ao padrão
+  await page.waitForTimeout(150);
+
   /* ───── A3. H2H no card GS ───── */
   t = await liveTxt();
   if (t.includes('📜 Confrontos em Copas') && t.includes('2010')) ok('H2H no card GS: México×África do Sul mostra o jogo de 2010');
@@ -183,7 +197,7 @@ const fail = (name, detail) => { results.push({ s: '❌', name, detail }); conso
   await card.locator('span', { hasText: /⚡ classif\.: .+ ▾/ }).click();
   await page.waitForTimeout(200);
   t = await card.innerText();
-  if (/Chance de classificação no Grupo A com este jogo 0–4/.test(t)) ok('Badge ⚡ classif. expande tabela antes→agora (jogo 0×4 finalizado)');
+  if (/Chance de classificação.*no Grupo A com este jogo 0–4/.test(t.replace(/\n/g, ' '))) ok('Badge ⚡ classif. expande tabela antes→agora (jogo 0×4 finalizado)');
   else fail('Expansão do badge classif.', t.match(/⚡ classif[\s\S]{0,80}/)?.[0]);
   await card.locator('span', { hasText: /⚡ classif\.: .+ ▴/ }).click(); // fecha
   await page.screenshot({ path: path.join(SHOTS, '2-badges.png') });
@@ -391,6 +405,17 @@ const fail = (name, detail) => { results.push({ s: '❌', name, detail }); conso
   const row = body.match(/0\s*×\s*4|0–4|0 × 4/);
   if (row) ok('Resultado inputado (0×4) listado na aba Surpresas');
   else fail('Resultado 0×4 não encontrado na lista', body.slice(0, 400));
+  // painel de calibração: agora também placar (modelo vs jogo-médio) e ganho no placar
+  if (/Surpresa média \(placar\)/.test(body) && /jogo-médio/.test(body) && /Ganho no placar/.test(body))
+    ok('Calibração do placar (modelo vs jogo-médio) presente no painel');
+  else fail('Calibração de placar', body.match(/Surpresa média \(placar\)[\s\S]{0,60}/)?.[0] || 'ausente');
+  // ranking por surpresa de placar e de resultado
+  if (body.includes('↓ Surpresa placar') && body.includes('↓ Surpresa resultado'))
+    ok('Ordenação por surpresa de placar e de resultado disponível');
+  else fail('Botões de ordenação placar/resultado', 'ausentes');
+  await page.click('text=↓ Surpresa resultado');
+  await page.waitForTimeout(200);
+  probe('Ordenar por surpresa de resultado aplicado sem erro');
   // painel de calibração (precisão do modelo vs acaso)
   if (body.includes('Precisão do modelo vs acaso') && /Acerto do resultado/.test(body) && /Ganho sobre o acaso/.test(body) && /bits\/jogo/.test(body))
     ok('Painel de calibração "modelo vs acaso" renderiza (acerto 1X2, surpresa média, ganho)');

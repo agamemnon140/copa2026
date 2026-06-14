@@ -600,7 +600,8 @@ const runSim = (groups, ur, fp, seed) => {
 const groupPosProbs = (games, teams, gn, n, seedBase) => {
   const lam = games.map(g => g.fx ? null : cL(g.eH, g.eA, matchTilt(g.h, g.a))); // la/lb fixos por jogo — fora do loop
   const tieKey = 200 + gn.charCodeAt(0) - 65; // mesma chave de substream do runSim
-  const counts = {}; teams.forEach(t => { counts[t] = [0, 0, 0, 0]; });
+  // por time: pos = contagem de 1º/2º/3º/4º; pts/gf/gd = SOMAS (÷n = média) para métricas extras
+  const stat = {}; teams.forEach(t => { stat[t] = { pos: [0, 0, 0, 0], pts: 0, gf: 0, gd: 0 }; });
   for (let i = 0; i < n; i++) {
     const seed = seedBase + i;
     const tb = {}; teams.forEach(t => { tb[t] = { pts: 0, gd: 0, gf: 0 }; });
@@ -612,9 +613,10 @@ const groupPosProbs = (games, teams, gn, n, seedBase) => {
       if (gA > gB) tb[g.h].pts += 3; else if (gA < gB) tb[g.a].pts += 3; else { tb[g.h].pts++; tb[g.a].pts++; }
       return { home: g.h, away: g.a, gA, gB };
     });
-    rankGroup(teams, tb, gm, makeRnd(seed, tieKey)).sorted.forEach((t, p) => counts[t][p]++);
+    teams.forEach(t => { stat[t].pts += tb[t].pts; stat[t].gf += tb[t].gf; stat[t].gd += tb[t].gd; });
+    rankGroup(teams, tb, gm, makeRnd(seed, tieKey)).sorted.forEach((t, p) => stat[t].pos[p]++);
   }
-  return counts;
+  return stat;
 };
 // P(A avançar) num mata-mata — analítico, espelha o sKO exatamente: cauda da
 // Poisson colapsada em 7 gols (como sP), prorrogação com λ·0.33, pênaltis
@@ -1036,6 +1038,7 @@ export default function WC2026() {
   const [evForm, setEvForm] = useState({ t: 'g', s: 'A', m: '' }); // editor de evento minutado do card ao vivo aberto
   const [koHist, setKoHist] = useState(null); // mn do card KO com histórico de Copas aberto
   const [clsOpen, setClsOpen] = useState(null); // idx do jogo GS com a tabela de classificação antes→agora aberta
+  const [clsMetric, setClsMetric] = useState('class'); // métrica observada na tabela de impacto: class|p1..p4|pts|gf|gd
   const [bracketSel, setBracketSel] = useState(null); // {type:'match',mn} | {type:'group',gn} | null — painel de detalhe do bracket
   const [surSort, setSurSort] = useState('bits'); // ordenação da aba Surpresas: 'bits' | 'impact'
   const [surExpand, setSurExpand] = useState(null); // resKey expandida (movers) na aba Surpresas
@@ -1205,10 +1208,21 @@ export default function WC2026() {
     const oC = runGroupCached(gn, teams, mkGroupGames(gn, teams, urMinus));
     const q = qP3(gn);
     const movers = teams.map(t => {
-      const d = [0, 1, 2, 3].map(p => (wC[t][p] - oC[t][p]) / IMPACT_N * 100);
+      const d = [0, 1, 2, 3].map(p => (wC[t].pos[p] - oC[t].pos[p]) / IMPACT_N * 100);
       return { t, dP1: d[0], dP2: d[1], dP3: d[2], dP4: d[3], dAdv: d[0] + d[1] + q * d[2] };
     }).sort((x, y) => Math.abs(y.dAdv) - Math.abs(x.dAdv));
     return { type: 'gs', gn, q, n: IMPACT_N, movers, headline: movers[0] };
+  };
+  // Métricas observáveis no impacto da aba Resultados (antes → agora).
+  const IMPACT_METRICS = {
+    class: { label: 'Classificar', pct: true, fn: (st, q) => (st.pos[0] + st.pos[1] + q * st.pos[2]) / IMPACT_N * 100 },
+    p1: { label: '1º lugar', pct: true, fn: st => st.pos[0] / IMPACT_N * 100 },
+    p2: { label: '2º lugar', pct: true, fn: st => st.pos[1] / IMPACT_N * 100 },
+    p3: { label: '3º lugar', pct: true, fn: st => st.pos[2] / IMPACT_N * 100 },
+    p4: { label: '4º lugar', pct: true, fn: st => st.pos[3] / IMPACT_N * 100 },
+    pts: { label: 'Pontos', pct: false, unit: 'pts', fn: st => st.pts / IMPACT_N },
+    gf: { label: 'Gols marcados', pct: false, unit: 'gols', fn: st => st.gf / IMPACT_N },
+    gd: { label: 'Saldo de gols', pct: false, unit: '', signed: true, fn: st => st.gd / IMPACT_N },
   };
   // Expectativa de classificação dos times do grupo ANTES do jogo idx vs SE ELE TERMINAR gA×gB.
   // Usado no card ao vivo (placar corrente). "Antes" = demais resultados do grupo mantidos, este jogo livre.
@@ -1219,42 +1233,52 @@ export default function WC2026() {
     const oC = runGroupCached(gn, teams, mkGroupGames(gn, teams, urMinus));
     const wC = runGroupCached(gn, teams, mkGroupGames(gn, teams, { ...urMinus, [idx]: { gA, gB } }));
     const q = qP3(gn);
-    const adv = (c, t) => (c[t][0] + c[t][1] + q * c[t][2]) / IMPACT_N * 100;
     // P(o 3º colocado do grupo avançar): Σ_t P(t é 3º)·a_t, com a_t = P(avança | é 3º) do último MC.
     // Baseline reproduz g3p[gn]; muda quando o resultado empurra um time forte/fraco para a 3ª posição.
     const aOf = t => { const ga = res?.[t]?.g3a || 0, go = res?.[t]?.g3o || 0; return (ga + go) > 0 ? ga / (ga + go) : q; };
-    const gp3 = c => teams.reduce((s, t) => s + (c[t][2] / IMPACT_N) * aOf(t), 0) * 100;
-    return { gn, q, rows: teams.map(t => ({ t, before: adv(oC, t), after: adv(wC, t) })), third: { before: gp3(oC), after: gp3(wC), hasMC: !!res } };
+    const gp3 = c => teams.reduce((s, t) => s + (c[t].pos[2] / IMPACT_N) * aOf(t), 0) * 100;
+    // rows com before/after por time para a métrica escolhida (fn do IMPACT_METRICS)
+    const rowsFor = fn => teams.map(t => ({ t, before: fn(oC[t], q), after: fn(wC[t], q) }));
+    return { gn, q, rowsFor, third: { before: gp3(oC), after: gp3(wC), hasMC: !!res } };
   };
   // Tabela "expectativa de classificação antes → agora" dos 4 times do grupo, dado que
   // o jogo idx termina gA×gB. highlight = times a destacar (os que jogaram). Reusada
   // no card ao vivo (placar corrente) e no card de jogo já finalizado (placar fixado).
   const classTable = (idx, gA, gB, highlight) => {
     const sh = qualShift(idx, gA, gB);
-    const ordered = sh.rows.slice().sort((x, y) => y.after - x.after);
+    const M = IMPACT_METRICS[clsMetric];
+    const ordered = sh.rowsFor(M.fn).slice().sort((x, y) => y.after - x.after);
+    const fmt = v => M.pct ? v.toFixed(0) + '%' : (M.signed && v > 0 ? '+' : '') + v.toFixed(1);
+    const fmtD = d => (d > 0 ? '+' : '') + (M.pct ? d.toFixed(0) + ' p.p.' : d.toFixed(1) + (M.unit ? ' ' + M.unit : ''));
+    const thr = M.pct ? 0.5 : 0.05; // limiar p/ colorir o Δ
     return (
       <div style={{ marginTop: '6px', padding: '6px 8px', background: card, borderRadius: '4px', border: `1px solid ${bd}` }}>
-        <div style={{ fontSize: '8px', color: dm, marginBottom: '4px' }}>Chance de classificação no Grupo {sh.gn} com este jogo <strong style={{ color: tx }}>{gA}–{gB}</strong> (antes deste jogo → agora). Inclui a repescagem dos 3ºs (q = {(sh.q * 100).toFixed(0)}%).</div>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 52px 14px 52px 56px', gap: '4px', fontSize: '8px', color: dm, fontWeight: 600, padding: '0 0 2px', borderBottom: `1px solid ${bd}` }}>
+        <div style={{ display: 'flex', gap: '3px', flexWrap: 'wrap', marginBottom: '5px' }}>
+          {Object.entries(IMPACT_METRICS).map(([k, m]) => (
+            <button key={k} onClick={() => setClsMetric(k)} style={{ padding: '1px 6px', fontSize: '8px', fontWeight: clsMetric === k ? 700 : 400, background: clsMetric === k ? `${acc}33` : 'transparent', color: clsMetric === k ? acc : dm, border: `1px solid ${clsMetric === k ? acc : bd}`, borderRadius: '3px', cursor: 'pointer' }}>{m.label}</button>
+          ))}
+        </div>
+        <div style={{ fontSize: '8px', color: dm, marginBottom: '4px' }}>{M.pct ? (clsMetric === 'class' ? <>Chance de <strong style={{ color: tx }}>classificação</strong> (1º+2º+{(sh.q * 100).toFixed(0)}%·3º)</> : <>Chance de terminar em <strong style={{ color: tx }}>{M.label}</strong></>) : <>Expectativa de <strong style={{ color: tx }}>{M.label.toLowerCase()}</strong></>} no Grupo {sh.gn} com este jogo <strong style={{ color: tx }}>{gA}–{gB}</strong> (antes deste jogo → agora).</div>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 52px 14px 52px 60px', gap: '4px', fontSize: '8px', color: dm, fontWeight: 600, padding: '0 0 2px', borderBottom: `1px solid ${bd}` }}>
           <span>Time</span><span style={{ textAlign: 'right' }}>antes</span><span /><span style={{ textAlign: 'right' }}>agora</span><span style={{ textAlign: 'right' }}>Δ</span>
         </div>
         {ordered.map(r => {
           const on = highlight.includes(r.t);
           const d = r.after - r.before;
           return (
-            <div key={r.t} style={{ display: 'grid', gridTemplateColumns: '1fr 52px 14px 52px 56px', gap: '4px', alignItems: 'center', fontSize: '10px', padding: '1px 0', opacity: on ? 1 : 0.6 }}>
+            <div key={r.t} style={{ display: 'grid', gridTemplateColumns: '1fr 52px 14px 52px 60px', gap: '4px', alignItems: 'center', fontSize: '10px', padding: '1px 0', opacity: on ? 1 : 0.6 }}>
               <span style={{ fontWeight: on ? 700 : 400, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{fl(r.t)} {nm(r.t)}</span>
-              <span style={{ textAlign: 'right', color: dm }}>{r.before.toFixed(0)}%</span>
+              <span style={{ textAlign: 'right', color: dm }}>{fmt(r.before)}</span>
               <span style={{ textAlign: 'center', color: dm }}>→</span>
-              <span style={{ textAlign: 'right', fontWeight: 700, color: r.after > 60 ? gn : r.after > 30 ? acc : tx }}>{r.after.toFixed(0)}%</span>
-              <span style={{ textAlign: 'right', fontWeight: 700, color: d > 0.5 ? gn : d < -0.5 ? rd : dm }}>{d > 0 ? '+' : ''}{d.toFixed(0)} p.p.</span>
+              <span style={{ textAlign: 'right', fontWeight: 700, color: M.pct ? (r.after > 60 ? gn : r.after > 30 ? acc : tx) : tx }}>{fmt(r.after)}</span>
+              <span style={{ textAlign: 'right', fontWeight: 700, color: d > thr ? gn : d < -thr ? rd : dm }}>{fmtD(d)}</span>
             </div>
           );
         })}
-        {sh.third.hasMC && (() => {
+        {clsMetric === 'class' && sh.third.hasMC && (() => {
           const d3 = sh.third.after - sh.third.before;
           return (
-            <div style={{ marginTop: '4px', paddingTop: '4px', borderTop: `1px solid ${bd}`, display: 'grid', gridTemplateColumns: '1fr 52px 14px 52px 56px', gap: '4px', alignItems: 'center', fontSize: '9px' }} title="Chance de o time que terminar em 3º neste grupo entrar na repescagem dos 8 melhores 3ºs — ponderada pela chance de cada time ser o 3º (mini-MC) e pela qualidade de cada um como 3º (último MC).">
+            <div style={{ marginTop: '4px', paddingTop: '4px', borderTop: `1px solid ${bd}`, display: 'grid', gridTemplateColumns: '1fr 52px 14px 52px 60px', gap: '4px', alignItems: 'center', fontSize: '9px' }} title="Chance de o time que terminar em 3º neste grupo entrar na repescagem dos 8 melhores 3ºs — ponderada pela chance de cada time ser o 3º (mini-MC) e pela qualidade de cada um como 3º (último MC).">
               <span style={{ color: bl, fontWeight: 600 }}>3º do grupo se classifica</span>
               <span style={{ textAlign: 'right', color: dm }}>{sh.third.before.toFixed(0)}%</span>
               <span style={{ textAlign: 'center', color: dm }}>→</span>
@@ -2231,13 +2255,17 @@ export default function WC2026() {
               // Coleta todos os resultados preenchidos (GS + KO) com surpresa analítica pré-jogo.
               // Acrescenta dados de calibração: acerto do 1X2 (resultado mais provável aconteceu?),
               // prob. do favorito do modelo e acerto do placar exato (moda).
+              // Baseline "sem informação dos times" para o PLACAR: Poisson de um jogo médio
+              // equilibrado (Elo igual, sem tilt) — o análogo do chute uniforme 1X2, mas no placar.
+              const { la: la0, lb: lb0 } = cL(1700, 1700, 0);
+              const naiveScoreBits = (gA, gB) => -Math.log2(Math.max(pp(la0, gA) * pp(lb0, gB), 1e-12));
               const calib = (eH, eA, h, a, gA, gB) => {
                 const s = surpriseOf(eH, eA, h, a, gA, gB);
                 const pr = mProbs(eH, eA, h, a);
                 const pTop = Math.max(pr.pH, pr.pD, pr.pA) / 100; // prob do desfecho mais provável (favorito)
                 const pAct = (gA > gB ? pr.pH : gA < gB ? pr.pA : pr.pD) / 100;
                 const ms = modeScore(eH, eA, h, a);
-                return { ...s, pTop, hit: pAct >= pTop - 1e-9, modeHit: ms.a === gA && ms.b === gB };
+                return { ...s, pTop, hit: pAct >= pTop - 1e-9, modeHit: ms.a === gA && ms.b === gB, naiveScoreBits: naiveScoreBits(gA, gB) };
               };
               const rows = [];
               GS.forEach(([g, hi, ai, date, city], idx) => {
@@ -2267,12 +2295,17 @@ export default function WC2026() {
               const hitN = rows.filter(r => r.hit).length, hitRate = N ? hitN / N * 100 : 0;
               const expHit = N ? rows.reduce((s, r) => s + r.pTop, 0) / N * 100 : 0; // taxa de acerto esperada (calibração)
               const modeN = rows.filter(r => r.modeHit).length;
+              // Calibração do PLACAR: surpresa média do placar exato vs baseline sem info de time.
+              const avgScore = N ? rows.reduce((s, r) => s + r.bitsExact, 0) / N : 0;
+              const avgNaiveScore = N ? rows.reduce((s, r) => s + r.naiveScoreBits, 0) / N : 0;
+              const gainScore = avgNaiveScore - avgScore; // >0 = modelo prevê placares melhor que o jogo-médio
+              const skillScore = avgNaiveScore > 0 ? gainScore / avgNaiveScore * 100 : 0;
               rows.forEach(r => {
                 r.imp = qualImpact(r.key);
                 r.mag = r.imp ? (r.imp.type === 'ko' ? r.imp.dW : Math.abs(r.imp.headline.dAdv)) : -1;
               });
-              const sorted = [...rows].sort((x, y) => surSort === 'impact'
-                ? (y.mag - x.mag) || (y.bitsExact - x.bitsExact)
+              const sorted = [...rows].sort((x, y) => surSort === 'impact' ? (y.mag - x.mag) || (y.bitsExact - x.bitsExact)
+                : surSort === 'bitsOut' ? (y.bitsOut - x.bitsOut) || (y.bitsExact - x.bitsExact)
                 : y.bitsExact - x.bitsExact);
               return (
                 <div>
@@ -2299,11 +2332,21 @@ export default function WC2026() {
                           <div style={{ fontSize: '8px', color: dm }}>Placar exato (moda)</div>
                           <div style={{ fontSize: '15px', fontWeight: 800, color: tx }}>{modeN}/{N} <span style={{ fontSize: '9px', color: dm, fontWeight: 400 }}>jogos</span></div>
                         </div>
+                        <div title="Surpresa média do modelo sobre o PLACAR exato ocorrido. Baseline = um jogo médio equilibrado (Elo igual, sem tilt), o análogo do chute uniforme mas para o placar. Menor = melhor.">
+                          <div style={{ fontSize: '8px', color: dm }}>Surpresa média (placar)</div>
+                          <div style={{ fontSize: '15px', fontWeight: 800, color: avgScore < avgNaiveScore ? gn : rd }}>{avgScore.toFixed(2)} <span style={{ fontSize: '9px', color: dm, fontWeight: 400 }}>bits/jogo · jogo-médio {avgNaiveScore.toFixed(2)}</span></div>
+                        </div>
+                        <div title="Quanto o modelo prevê o PLACAR melhor que um jogo médio sem informação dos times: (surpresa jogo-médio − surpresa modelo) / surpresa jogo-médio. Positivo = a informação de Elo/tilt ajuda a prever o placar.">
+                          <div style={{ fontSize: '8px', color: dm }}>Ganho no placar</div>
+                          <div style={{ fontSize: '15px', fontWeight: 800, color: gainScore > 0.02 ? gn : gainScore < -0.02 ? rd : dm }}>{gainScore > 0 ? '+' : ''}{gainScore.toFixed(2)} bits <span style={{ fontSize: '9px', color: dm, fontWeight: 400 }}>({skillScore > 0 ? '+' : ''}{skillScore.toFixed(0)}%)</span></div>
+                        </div>
                       </div>
-                      <div style={{ fontSize: '8px', color: dm, marginTop: '6px', lineHeight: 1.4 }}>{gainBits > 0.02 ? `O modelo está ${skill.toFixed(0)}% melhor que chutar V/E/D no acaso` : gainBits < -0.02 ? 'O modelo está pior que o acaso nestes jogos (zebras concentradas ou poucos jogos)' : 'O modelo está empatado com o acaso aqui'} — referido ao desfecho 1X2 nos 90 min. Compara a prob. que o modelo deu (sem ver o resultado) com o que aconteceu.</div>
+                      <div style={{ fontSize: '8px', color: dm, marginTop: '6px', lineHeight: 1.4 }}>{gainBits > 0.02 ? `O modelo está ${skill.toFixed(0)}% melhor que chutar V/E/D no acaso (resultado)` : gainBits < -0.02 ? 'O modelo está pior que o acaso no resultado nestes jogos (zebras concentradas ou poucos jogos)' : 'O modelo está empatado com o acaso no resultado aqui'}; no placar, {gainScore > 0.02 ? `${skillScore.toFixed(0)}% melhor` : gainScore < -0.02 ? 'pior' : 'empatado'} que um jogo médio sem info de time. Tudo medido sem o modelo ver o resultado (90 min).</div>
                     </div>
                     <div style={{ display: 'flex', gap: '6px', alignItems: 'center', marginBottom: '8px', flexWrap: 'wrap' }}>
-                      <SB active={surSort === 'bits'} onClick={() => setSurSort('bits')}>↓ Surpresa</SB>
+                      <span style={{ fontSize: '9px', color: dm }}>Ordenar:</span>
+                      <SB active={surSort === 'bits'} onClick={() => setSurSort('bits')}>↓ Surpresa placar</SB>
+                      <SB active={surSort === 'bitsOut'} onClick={() => setSurSort('bitsOut')}>↓ Surpresa resultado</SB>
                       <SB active={surSort === 'impact'} onClick={() => setSurSort('impact')}>↓ Impacto</SB>
                       <span style={{ fontSize: '9px', color: dm }}>{rows.length} resultado(s)</span>
                     </div>

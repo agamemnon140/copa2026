@@ -31,7 +31,7 @@ const code = [
   grab('const h2hTable = (subset, gm)', 'return m;\n};'),
   grab('const rankTied = (block, tb, gm, crit', 'return out;\n};'),
   grab('const rankGroup = (teams, tb, gm', 'return { sorted, crit };\n};'),
-  grab('const groupPosProbs = (games, teams, gn', 'return counts;\n};'),
+  grab('const groupPosProbs = (games, teams, gn', 'return stat;\n};'),
   grab('const koAdvProb = (a, b, tA, tB)', 'r90, ret, pen };\n};'),
   grab('const mProbs = (a, b, tA', 'pA: pA / t * 100 }; };'),
   grab('const surpriseOf = (eH, eA, tA, tB, gA, gB)', 'bitsOut: -Math.log2(Math.max(pOut, 1e-12)) };\n};'),
@@ -109,18 +109,22 @@ const mkG = (fxMap = {}) => [[0, 'T1', 'T2'], [1, 'T3', 'T4'], [2, 'T1', 'T3'], 
 const gp1 = groupPosProbs(mkG(), T, 'X', 2000, 1);
 const gp2 = groupPosProbs(mkG(), T, 'X', 2000, 1);
 chk('groupPosProbs determinístico', JSON.stringify(gp1) === JSON.stringify(gp2));
-chk('groupPosProbs: Σ posições = n por time', T.every(t => gp1[t].reduce((s, v) => s + v, 0) === 2000));
-chk('groupPosProbs: Σ times = n por posição', [0, 1, 2, 3].every(p => T.reduce((s, t) => s + gp1[t][p], 0) === 2000));
-chk('groupPosProbs: favorito T1 mais 1º que T4', gp1['T1'][0] > gp1['T4'][0], `${gp1['T1'][0]} vs ${gp1['T4'][0]}`);
+chk('groupPosProbs: Σ posições = n por time', T.every(t => gp1[t].pos.reduce((s, v) => s + v, 0) === 2000));
+chk('groupPosProbs: Σ times = n por posição', [0, 1, 2, 3].every(p => T.reduce((s, t) => s + gp1[t].pos[p], 0) === 2000));
+chk('groupPosProbs: favorito T1 mais 1º que T4', gp1['T1'].pos[0] > gp1['T4'].pos[0], `${gp1['T1'].pos[0]} vs ${gp1['T4'].pos[0]}`);
+chk('groupPosProbs: T1 (favorito) marca mais gols que T4 (média)', gp1['T1'].gf / 2000 > gp1['T4'].gf / 2000, `${(gp1['T1'].gf / 2000).toFixed(2)} vs ${(gp1['T4'].gf / 2000).toFixed(2)}`);
+chk('groupPosProbs: pts médio coerente (0..9)', T.every(t => { const m = gp1[t].pts / 2000; return m >= 0 && m <= 9; }));
+chk('groupPosProbs: Σ saldo do grupo = 0 (média)', Math.abs(T.reduce((s, t) => s + gp1[t].gd, 0)) < 1e-6);
 // grupo 100% fixado, sem empates → contagens degeneradas (n em uma única posição por time)
 const allFx = { 0: { gA: 2, gB: 0 }, 1: { gA: 1, gB: 0 }, 2: { gA: 3, gB: 1 }, 3: { gA: 2, gB: 1 }, 4: { gA: 0, gB: 1 }, 5: { gA: 1, gB: 0 } };
 const gpFx = groupPosProbs(mkG(allFx), T, 'X', 500, 1);
-chk('groupPosProbs: grupo fechado → posições determinadas', T.every(t => gpFx[t].some(v => v === 500)));
+chk('groupPosProbs: grupo fechado → posições determinadas', T.every(t => gpFx[t].pos.some(v => v === 500)));
+chk('groupPosProbs: grupo fechado → gf/gd/pts determinísticos (T1 vence 3: 2-0,3-1,1-0)', gpFx['T1'].gf / 500 === 6 && gpFx['T1'].gd / 500 === 5 && gpFx['T1'].pts / 500 === 9);
 // CRN: liberar 1 jogo com a MESMA seedBase → o jogo liberado sorteia, o resto idêntico
 const fx5 = { 5: { gA: 1, gB: 0 } };
 const gpW = groupPosProbs(mkG(fx5), T, 'X', 2000, 1);
 const gpO = groupPosProbs(mkG(), T, 'X', 2000, 1);
-chk('groupPosProbs: CRN — Δ pareado pequeno e coerente', T.every(t => [0, 1, 2, 3].every(p => Math.abs(gpW[t][p] - gpO[t][p]) <= 2000)), JSON.stringify(T.map(t => gpW[t][0] - gpO[t][0])));
+chk('groupPosProbs: CRN — Δ pareado pequeno e coerente', T.every(t => [0, 1, 2, 3].every(p => Math.abs(gpW[t].pos[p] - gpO[t].pos[p]) <= 2000)), JSON.stringify(T.map(t => gpW[t].pos[0] - gpO[t].pos[0])));
 
 // WCH — base histórica de Copas (gerada)
 chk('WCH: base não-vazia (~600 jogos)', WCH.length > 400, WCH.length);
