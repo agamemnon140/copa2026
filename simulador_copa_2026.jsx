@@ -137,8 +137,10 @@ let _fav = 1; // peso do favoritismo: 0 = modelo antigo (c0=0.55 fixo), 1 = reca
 let _spread = true; // tilt de goleada: total de gols sobe em desníveis grandes de Elo (favorito goleia), como nos dados reais
 let _inj = {}; // (não usado — lesões agora são por jogo via _injM)
 let _injM = {}; // lesões por jogo de grupo: _injM[idxGS] = { h: nº lesões mandante, a: nº lesões visitante }
+let _dynAdj = {}; // ajuste dinâmico de Elo a partir dos resultados já disputados (camada opcional; vazio = desligado)
 const INJ_ELO = 18; // queda de Elo por lesão de titular importante (~15-20 é uma boa representação)
-const rtBase = t => _rSys === 'custom' ? (_customElo[t] || ELO[t] || 1400) : _rSys === 'elo' ? (ELO[t] || 1400) : _rSys === 'bet' ? (BET[t] || 1400) : _rSys === 'pele' ? (PELE[t] || ELO[t] || 1400) : (FP[t] || 1400);
+const rtRaw = t => _rSys === 'custom' ? (_customElo[t] || ELO[t] || 1400) : _rSys === 'elo' ? (ELO[t] || 1400) : _rSys === 'bet' ? (BET[t] || 1400) : _rSys === 'pele' ? (PELE[t] || ELO[t] || 1400) : (FP[t] || 1400);
+const rtBase = t => rtRaw(t) + (_dynAdj[t] || 0); // rating efetivo = base + ajuste dinâmico (0 quando desligado)
 const tiltOf = t => (_useTilt && TILT[t] != null) ? TILT[t] : 0;
 const matchTilt = (tA, tB) => tiltOf(tA) + tiltOf(tB); // soma dos dois times = shift no total de gols
 
@@ -960,6 +962,26 @@ const runMC = (groups, n, ur, conditions = []) => {
   return { ...agg, n, pool, all };
 };
 
+const DYN_K = 20; // K fixo do Elo dinâmico (sem multiplicador de margem de vitória)
+// Elo dinâmico: atualiza a força a partir dos jogos de GRUPO já disputados, em ordem de data.
+// Vitória=1, empate=0.5, derrota=0 (sem margem). Retorna { time: ΔElo } a somar sobre rtRaw.
+// Depende dos globais de modelo (_rSys etc.) estarem sincronizados pelo chamador.
+const computeDynAdj = (groups, ur, K = DYN_K) => {
+  const adj = {};
+  const r = t => rtRaw(t) + (adj[t] || 0);
+  const idxs = [];
+  GS.forEach((row, i) => { if (ur && ur[i] && ur[i].gA != null && ur[i].gB != null) idxs.push(i); });
+  idxs.sort((a, b) => dateKey(GS[a][3]) - dateKey(GS[b][3]) || (GS_BRT[a] || '').localeCompare(GS_BRT[b] || ''));
+  idxs.forEach(i => {
+    const [gn, hi, ai] = GS[i];
+    const h = groups[gn][hi], a = groups[gn][ai], { gA, gB } = ur[i];
+    const exH = 1 / (1 + Math.pow(10, (r(a) - r(h)) / 400));
+    const dH = K * ((gA > gB ? 1 : gA < gB ? 0 : 0.5) - exH);
+    adj[h] = (adj[h] || 0) + dH; adj[a] = (adj[a] || 0) - dH;
+  });
+  return adj;
+};
+
 // Re-agrega um pool existente sob novas condições — instantâneo, mesmo universo de sims (sem ruído).
 const reaggregate = (pool, all, groups, conditions = []) => {
   const agg = aggregate(pool, all, groups, conditions);
@@ -1018,6 +1040,8 @@ export default function WC2026() {
   const [mcErr, setMcErr] = useState(null); // erro da última simulação (banner)
   const mcAbortRef = useRef(false); // pedido de cancelamento entre chunks
   const [res, setRes] = useState(null);
+  const [appliedKey, setAppliedKey] = useState(null); // assinatura dos resultados já incorporados ao último MC
+  const [baseAgg, setBaseAgg] = useState(null); // agregado pré-Copa (zero resultados) p/ indicadores Δ
   const [g3p, setG3p] = useState(null);
   const [muPct, setMuPct] = useState(null);
   const [comboList, setComboList] = useState(null);
@@ -1042,6 +1066,7 @@ export default function WC2026() {
   const [preOpen, setPreOpen] = useState(null); // idx do jogo GS (ainda sem placar) com o "E se?" pré-jogo aberto
   const [bracketSel, setBracketSel] = useState(null); // {type:'match',mn} | {type:'group',gn} | null — painel de detalhe do bracket
   const [surSort, setSurSort] = useState('bits'); // ordenação da aba Surpresas: 'bits' | 'impact'
+  const [surModels, setSurModels] = useState(false); // mostra a comparação de modelos (backtest) dentro da aba Surpresas
   const [surExpand, setSurExpand] = useState(null); // resKey expandida (movers) na aba Surpresas
   const [evoData, setEvoData] = useState(null); // evolution snapshots
   const [evoTeams, setEvoTeams] = useState(['Brazil','Argentina','Spain','France']);
@@ -1053,8 +1078,9 @@ export default function WC2026() {
   const [evoFilterTeam, setEvoFilterTeam] = useState(''); // '' = todos os jogos; nome do time = só jogos dele
   const [evoGrp, setEvoGrp] = useState('A'); // grupo da tabela de evolução (Cruzamentos▸Evolução)
   const [evoTblMetric, setEvoTblMetric] = useState('adv'); // métrica da tabela de evolução
-  const [evoTbl, setEvoTbl] = useState(null); // { gn, sims, teams, snaps:[{label,idx,probs}] }
   const [evoTblLoading, setEvoTblLoading] = useState(false);
+  const [evoAll, setEvoAll] = useState({}); // { gn: tbl } — pré-preenchido p/ os 12 grupos após o MC
+  const [evoAllProg, setEvoAllProg] = useState(null); // { done, total } enquanto pré-calcula em segundo plano
   const [tpcData, setTpcData] = useState(null); // position-conditioned matchups
   const [matchByG3Data, setMatchByG3Data] = useState(null); // g3-filtered match data
   const [matchChampData, setMatchChampData] = useState(null);
@@ -1112,6 +1138,7 @@ export default function WC2026() {
   const [spread, setSpread] = useState(() => lsLoad('spread', true));
   const [injuries, setInjuries] = useState(() => lsLoad('injuries', {})); // { team: nº de lesões }
   const [homeAdv, setHomeAdv] = useState(() => lsLoad('homeAdv', 70));
+  const [dynElo, setDynElo] = useState(() => lsLoad('dynElo', false)); // Elo dinâmico: atualiza a força pelos resultados já disputados (camada opcional)
 
   const groups = useMemo(() => rG(pc), [pc]);
   const all = useMemo(() => Object.values(groups).flat(), [groups]);
@@ -1127,9 +1154,32 @@ export default function WC2026() {
   // MC em BLOCOS: nunca bloqueia a UI por mais de ~um chunk (importante em 100k+ sims).
   // Progresso percentual visível, cancelável, e try/catch que aborta limpo em erro.
   const cancelMC = () => { mcAbortRef.current = true; };
+  // Assinatura canônica dos resultados preenchidos — compara o que está digitado vs o que já foi simulado.
+  const urKey = (ur) => Object.keys(ur || {}).filter(k => ur[k] && ur[k].gA != null && ur[k].gB != null).sort().map(k => `${k}:${ur[k].gA}-${ur[k].gB}${ur[k].pw ? 'p' + ur[k].pw : ''}`).join(';');
+  // Assinatura do MODELO (não inclui resultados): muda → recalcula a baseline pré-Copa.
+  const modelKey = () => JSON.stringify([rSys, useTilt, favWeight, spread, homeAdv, injuries, customElo, customME, dynElo]);
+  const baseKeyRef = useRef(null);
+  // Baseline pré-Copa (zero resultados): referência fixa "início da Copa" p/ os Δ das sub-abas.
+  // Roda SEM ajuste dinâmico de Elo (o dynElo é uma camada que entra só no res principal),
+  // com N limitado (indicador, não precisa da mesma precisão do MC principal).
+  const computeBaseline = () => {
+    try {
+      _rSys = rSys; _customElo = customElo; _ME = customME; _useTilt = useTilt; _fav = favWeight; _spread = spread; _injM = injuries; _hb = homeAdv;
+      const svDyn = _dynAdj; _dynAdj = {}; // baseline ignora o Elo dinâmico
+      const NB = Math.min(Math.max(100, Math.floor(+nSim) || 10000), 30000);
+      const r = runMC(groups, NB, {}, []);
+      _dynAdj = svDyn; // restaura p/ render (rt) e demais cálculos seguirem com o ajuste vigente
+      setBaseAgg({ p: r.p, g3p: r.g3p, muPct: r.muPct, comboList: r.comboList, tmPct: r.tmPct, posMu: r.posMu, matchTm: r.matchTm, n: NB });
+    } catch (err) { /* baseline é só indicador; falha não quebra o app */ }
+  };
+  const maybeBaseline = () => { const mk = modelKey(); if (baseKeyRef.current !== mk) { baseKeyRef.current = mk; setTimeout(computeBaseline, 0); } };
   const doMC = () => {
+    const runKey = urKey(userRes); // resultados que ESTE MC vai incorporar
     if (running) return; // já rodando (efeitos automáticos não cancelam nem empilham)
     const N = Math.max(100, Math.floor(+nSim) || 10000); // tolera campo vazio/inválido; sem teto superior
+    // Elo dinâmico: calcula o ajuste uma vez (depende dos globais de modelo) e reaplica a cada chunk.
+    _rSys = rSys; _customElo = customElo; _ME = customME; _useTilt = useTilt; _fav = favWeight; _spread = spread; _injM = injuries; _hb = homeAdv;
+    const dynAdj = dynElo ? computeDynAdj(groups, userRes, DYN_K) : {};
     setRunning(true); setMcProg(0); setMcErr(null);
     mcAbortRef.current = false;
     const pool = new Array(N);
@@ -1139,7 +1189,7 @@ export default function WC2026() {
       try {
         if (mcAbortRef.current) { setRunning(false); setMcProg(null); return; } // cancelado: mantém o universo anterior
         // re-sincroniza os globais a cada chunk (outras interações podem rodar entre eles)
-        _rSys = rSys; _customElo = customElo; _ME = customME; _useTilt = useTilt; _fav = favWeight; _spread = spread; _injM = injuries; _hb = homeAdv;
+        _rSys = rSys; _customElo = customElo; _ME = customME; _useTilt = useTilt; _fav = favWeight; _spread = spread; _injM = injuries; _hb = homeAdv; _dynAdj = dynAdj;
         const end = Math.min(N, i + CHUNK);
         for (; i < end; i++) pool[i] = runSim(groups, userRes);
         if (i < N) { setMcProg(Math.round(i / N * 100)); setTimeout(step, 0); return; }
@@ -1150,8 +1200,11 @@ export default function WC2026() {
             const r = { ...aggregate(pool, all0, groups, conditions), n: N, pool, all: all0 };
             poolRef.current = { pool: r.pool, all: r.all, groups }; // guarda o universo para re-filtragem instantânea
             applyAgg(r);
+            setAppliedKey(runKey); // resultados agora incorporados — limpa o "não aplicado"
             setMcMeta({ nAccepted: r.nAccepted, n: r.n, conds: conditions });
             setRunning(false); setMcProg(null); setTab('probs');
+            maybeBaseline(); // recalcula a baseline pré-Copa se o modelo mudou
+            setTimeout(precomputeEvoAll, 60); // pré-preenche a Evolução dos 12 grupos em segundo plano
           } catch (err) { setRunning(false); setMcProg(null); setMcErr('Falha ao agregar a simulação: ' + (err?.message || err)); }
         }, 0);
       } catch (err) {
@@ -1172,6 +1225,21 @@ export default function WC2026() {
   };
 
   const doSingle = () => { _rSys = rSys; _customElo = customElo; _ME = customME; _useTilt = useTilt; _fav = favWeight; _spread = spread; _injM = injuries; _hb = homeAdv; setSingle(runSim(groups, userRes)); setTab('single'); };
+  // Resultados digitados ainda não incorporados ao MC exibido (só vale depois da 1ª rodada).
+  const resultsDirty = res != null && appliedKey != null && urKey(userRes) !== appliedKey;
+  // ── Indicadores Δ "desde o início da Copa" (vs baseline pré-Copa) ────────────
+  const baseN = baseAgg?.n; // nº de sims da baseline (denominador próprio)
+  // Δ em pontos percentuais; cur/base já em %. Mostra só fora do modo condicional.
+  const dTag = (cur, base) => {
+    if (base == null || !Number.isFinite(base) || !Number.isFinite(cur)) return null;
+    const d = cur - base;
+    if (Math.abs(d) < 0.1) return <span style={{ fontSize: '8px', color: dm, marginLeft: '3px', opacity: 0.6 }} title={`início da Copa: ${base.toFixed(1)}%`}>±0</span>;
+    return <span style={{ fontSize: '8px', fontWeight: 700, marginLeft: '3px', color: d > 0 ? gn : rd }} title={`início da Copa: ${base.toFixed(1)}% → agora: ${cur.toFixed(1)}% (Δ desde o início)`}>{d > 0 ? '▲' : '▼'}{Math.abs(d).toFixed(1)}</span>;
+  };
+  // Busca o % da baseline para o mesmo par (lista [{a,b,pct}], ordem indiferente).
+  const basePairPct = (list, a, b) => { if (!list) return null; const m = list.find(x => (x.a === a && x.b === b) || (x.a === b && x.b === a)); return m ? m.pct : 0; };
+  // Busca o % da baseline para uma combinação de 3ºs (lista [{key,pct}]).
+  const baseComboPct = (key) => { if (!baseAgg?.comboList) return null; const m = baseAgg.comboList.find(c => c.key === key); return m ? m.pct : 0; };
 
   // ── Impacto instantâneo: Δ chance de classificação (GS) / de avanço (KO) ────
   // GS: pares de mini-MCs SÓ do grupo (6 jogos) com sementes idênticas (CRN) —
@@ -1238,13 +1306,14 @@ export default function WC2026() {
     const oC = runGroupCached(gn, teams, mkGroupGames(gn, teams, urMinus));
     const wC = runGroupCached(gn, teams, mkGroupGames(gn, teams, { ...urMinus, [idx]: { gA, gB } }));
     const q = qP3(gn);
-    // P(o 3º colocado do grupo avançar): Σ_t P(t é 3º)·a_t, com a_t = P(avança | é 3º) do último MC.
-    // Baseline reproduz g3p[gn]; muda quando o resultado empurra um time forte/fraco para a 3ª posição.
-    const aOf = t => { const ga = res?.[t]?.g3a || 0, go = res?.[t]?.g3o || 0; return (ga + go) > 0 ? ga / (ga + go) : q; };
-    const gp3 = c => teams.reduce((s, t) => s + (c[t].pos[2] / IMPACT_N) * aOf(t), 0) * 100;
+    // P(o 3º colocado do grupo avançar): condicionada pelo MC COMPLETO, que enxerga o corte
+    // entre-grupos (8 melhores 3ºs de 12). agora = res (todos os resultados); início = baseline pré-Copa.
+    // Σ_t g3a / Σ_t (g3a+g3o) sobre os times do grupo = fração das sims em que o 3º do grupo avançou.
+    const grpThird = (agg) => { if (!agg) return null; let a = 0, o = 0; teams.forEach(t => { a += agg[t]?.g3a || 0; o += agg[t]?.g3o || 0; }); return (a + o) > 0 ? (a / (a + o)) * 100 : null; };
+    const thirdNow = grpThird(res), thirdIni = grpThird(baseAgg?.p);
     // rows com before/after por time para a métrica escolhida (fn do IMPACT_METRICS)
     const rowsFor = fn => teams.map(t => ({ t, before: fn(oC[t], q), after: fn(wC[t], q) }));
-    return { gn, q, rowsFor, third: { before: gp3(oC), after: gp3(wC), hasMC: !!res } };
+    return { gn, q, rowsFor, third: { before: thirdIni, after: thirdNow, hasMC: thirdNow != null } };
   };
   // Tabela "expectativa de classificação antes → agora" dos 4 times do grupo, dado que
   // o jogo idx termina gA×gB. highlight = times a destacar (os que jogaram). Reusada
@@ -1281,14 +1350,15 @@ export default function WC2026() {
           );
         })}
         {clsMetric === 'class' && sh.third.hasMC && (() => {
-          const d3 = sh.third.after - sh.third.before;
+          const hasBefore = sh.third.before != null;
+          const d3 = hasBefore ? sh.third.after - sh.third.before : null;
           return (
-            <div style={{ marginTop: '4px', paddingTop: '4px', borderTop: `1px solid ${bd}`, display: 'grid', gridTemplateColumns: '1fr 52px 14px 52px 60px', gap: '4px', alignItems: 'center', fontSize: '9px' }} title="Chance de o time que terminar em 3º neste grupo entrar na repescagem dos 8 melhores 3ºs — ponderada pela chance de cada time ser o 3º (mini-MC) e pela qualidade de cada um como 3º (último MC).">
-              <span style={{ color: bl, fontWeight: 600 }}>3º do grupo se classifica</span>
-              <span style={{ textAlign: 'right', color: dm }}>{sh.third.before.toFixed(0)}%</span>
+            <div style={{ marginTop: '4px', paddingTop: '4px', borderTop: `1px solid ${bd}`, display: 'grid', gridTemplateColumns: '1fr 52px 14px 52px 60px', gap: '4px', alignItems: 'center', fontSize: '9px' }} title="Chance de o time que terminar em 3º neste grupo entrar na repescagem dos 8 melhores 3ºs — condicionada pelo MC COMPLETO, que enxerga o corte entre todos os 12 grupos (o mini-MC de um grupo não enxergaria). Referência: início da Copa (sem resultados) → agora (com todos os resultados aplicados), não apenas este jogo.">
+              <span style={{ color: bl, fontWeight: 600 }}>3º do grupo avança <span style={{ color: dm, fontWeight: 400, fontSize: '8px' }}>(início→agora)</span></span>
+              <span style={{ textAlign: 'right', color: dm }}>{hasBefore ? sh.third.before.toFixed(0) + '%' : '—'}</span>
               <span style={{ textAlign: 'center', color: dm }}>→</span>
               <span style={{ textAlign: 'right', fontWeight: 700, color: bl }}>{sh.third.after.toFixed(0)}%</span>
-              <span style={{ textAlign: 'right', fontWeight: 700, color: d3 > 0.5 ? gn : d3 < -0.5 ? rd : dm }}>{d3 > 0 ? '+' : ''}{d3.toFixed(0)} p.p.</span>
+              <span style={{ textAlign: 'right', fontWeight: 700, color: d3 == null ? dm : d3 > 0.5 ? gn : d3 < -0.5 ? rd : dm }}>{d3 == null ? '' : (d3 > 0 ? '+' : '') + d3.toFixed(0) + ' p.p.'}</span>
             </div>
           );
         })()}
@@ -1327,31 +1397,95 @@ export default function WC2026() {
   // adicionando os jogos do grupo um a um (demais resultados mantidos), e registra por time
   // as chances de posição (1º..4º, avança) e de fase do mata-mata (R16..Campeão).
   const EVO_METRICS = [['adv', 'Avança'], ['p1', '1º'], ['p2', '2º'], ['p3', '3º'], ['p4', '4º'], ['r16', 'R16'], ['qf', 'QF'], ['sf', 'SF'], ['fin', 'Final'], ['ch', 'Campeão']];
+  // Núcleo síncrono: calcula a tabela de evolução de UM grupo (snapshots jogo a jogo).
+  // Respeita o Elo dinâmico — cada snapshot recalcula o ajuste a partir dos seus resultados.
+  const buildGroupEvo = (gnArg) => {
+    _rSys = rSys; _customElo = customElo; _ME = customME; _useTilt = useTilt; _fav = favWeight; _spread = spread; _injM = injuries; _hb = homeAdv;
+    const gIdxs = [];
+    GS.forEach((row, i) => { if (row[0] === gnArg) gIdxs.push(i); });
+    gIdxs.sort((a, b) => dateKey(GS[a][3]) - dateKey(GS[b][3]) || GS_BRT[a].localeCompare(GS_BRT[b]));
+    const filled = gIdxs.filter(i => userRes[i]?.gA != null && userRes[i]?.gB != null);
+    const base = { ...userRes }; gIdxs.forEach(i => delete base[i]); // tira os jogos do grupo; adiciona um a um
+    const snaps = [{ label: 'Início', idx: null, ur: { ...base } }];
+    let acc = { ...base };
+    filled.forEach((i) => { acc = { ...acc, [i]: userRes[i] }; snaps.push({ label: 'M' + (i + 1), idx: i, ur: { ...acc } }); });
+    const sims = Math.max(500, Math.min(3000, Math.floor((+nSim || 10000) / 3)));
+    const teams = groups[gnArg];
+    const data = snaps.map(s => {
+      _dynAdj = dynElo ? computeDynAdj(groups, s.ur, DYN_K) : {};
+      const r = runMC(groups, sims, s.ur, []);
+      const probs = {};
+      teams.forEach(t => { const p = r.p[t] || {}; probs[t] = { adv: (p.g1 || 0) + (p.g2 || 0) + (p.g3a || 0), p1: p.g1 || 0, p2: p.g2 || 0, p3: (p.g3a || 0) + (p.g3o || 0), p4: p.g4 || 0, r16: p.r16 || 0, qf: p.qf || 0, sf: p.sf || 0, fin: p.fin || 0, ch: p.ch || 0 }; });
+      return { label: s.label, idx: s.idx, probs };
+    });
+    return { gn: gnArg, sims, teams, snaps: data };
+  };
+  // Botão manual "↻ recalcular" de um grupo.
   const computeGroupEvo = (gnArg) => {
     setEvoTblLoading(true);
     setTimeout(() => {
-      try {
-        _rSys = rSys; _customElo = customElo; _ME = customME; _useTilt = useTilt; _fav = favWeight; _spread = spread; _injM = injuries; _hb = homeAdv;
-        const gIdxs = [];
-        GS.forEach((row, i) => { if (row[0] === gnArg) gIdxs.push(i); });
-        gIdxs.sort((a, b) => dateKey(GS[a][3]) - dateKey(GS[b][3]) || GS_BRT[a].localeCompare(GS_BRT[b]));
-        const filled = gIdxs.filter(i => userRes[i]?.gA != null && userRes[i]?.gB != null);
-        const base = { ...userRes }; gIdxs.forEach(i => delete base[i]); // tira os jogos do grupo; adiciona um a um
-        const snaps = [{ label: 'Início', idx: null, ur: { ...base } }];
-        let acc = { ...base };
-        filled.forEach((i) => { acc = { ...acc, [i]: userRes[i] }; snaps.push({ label: 'M' + (i + 1), idx: i, ur: { ...acc } }); });
-        const sims = Math.max(500, Math.min(3000, Math.floor((+nSim || 10000) / 3)));
-        const teams = groups[gnArg];
-        const data = snaps.map(s => {
-          const r = runMC(groups, sims, s.ur, []);
-          const probs = {};
-          teams.forEach(t => { const p = r.p[t] || {}; probs[t] = { adv: (p.g1 || 0) + (p.g2 || 0) + (p.g3a || 0), p1: p.g1 || 0, p2: p.g2 || 0, p3: (p.g3a || 0) + (p.g3o || 0), p4: p.g4 || 0, r16: p.r16 || 0, qf: p.qf || 0, sf: p.sf || 0, fin: p.fin || 0, ch: p.ch || 0 }; });
-          return { label: s.label, idx: s.idx, probs };
-        });
-        setEvoTbl({ gn: gnArg, sims, teams, snaps: data });
-      } catch (e) { /* mantém tabela anterior */ }
+      try { const tbl = buildGroupEvo(gnArg); setEvoAll(p => ({ ...p, [gnArg]: tbl })); } catch (e) { /* mantém tabela anterior */ }
       setEvoTblLoading(false);
     }, 30);
+  };
+  // Pré-preenche os 12 grupos em segundo plano (1 grupo por tick), com progresso e cancelamento.
+  const evoRunRef = useRef(0);
+  const precomputeEvoAll = () => {
+    const runId = ++evoRunRef.current;
+    const gns = Object.keys(groups);
+    setEvoAllProg({ done: 0, total: gns.length });
+    let k = 0;
+    const next = () => {
+      if (evoRunRef.current !== runId) return; // nova rodada cancelou esta
+      if (k >= gns.length) { _dynAdj = dynElo ? computeDynAdj(groups, userRes, DYN_K) : {}; setEvoAllProg(null); return; } // restaura ajuste vigente p/ render
+      const gn = gns[k];
+      try { const tbl = buildGroupEvo(gn); setEvoAll(p => ({ ...p, [gn]: tbl })); } catch (e) { /* ignora grupo que falhar */ }
+      k++; setEvoAllProg({ done: k, total: gns.length });
+      setTimeout(next, 0);
+    };
+    setTimeout(next, 0);
+  };
+  // Tabela de comparação de modelos (Brier/log-loss) — reaproveitada na aba Modelos e em Surpresas.
+  const renderModelBacktest = () => {
+    const nFilled = GS.reduce((s, _, idx) => s + ((userRes[idx]?.gA != null && userRes[idx]?.gB != null) ? 1 : 0), 0);
+    const RAT = { fifa: 'FIFA', elo: 'Elo', bet: 'Apostas', pele: 'PELE' };
+    return (
+      <div>
+        <div style={{ fontSize: '11px', color: dm, marginBottom: '10px', lineHeight: 1.5 }}>Compara 48 configurações de modelo (4 ratings × tilt on/off × favoritismo on/off × mando 0/70/150) contra os <strong>{nFilled}</strong> jogos de fase de grupos já preenchidos, medindo <strong>Brier</strong> e <strong>log-loss</strong> (menor = melhor). Útil para descobrir qual modelo está acertando mais durante a Copa. Lesões não entram (são prospectivas).</div>
+        <button onClick={runBacktest} disabled={bsLoading || nFilled < 1} style={{ padding: '7px 14px', fontSize: '12px', fontWeight: 700, background: nFilled < 1 ? card : `${acc}33`, color: nFilled < 1 ? dm : acc, border: `1px solid ${nFilled < 1 ? bd : acc}`, borderRadius: '5px', cursor: nFilled < 1 ? 'default' : 'pointer', marginBottom: '12px' }}>{bsLoading ? 'Calculando…' : nFilled < 1 ? 'Preencha resultados de grupo primeiro' : `🔬 Rodar backtest (${nFilled} jogos)`}</button>
+        {bsData && bsData.n > 0 && (() => {
+          const best = bsData.results.find(r => !r.random); const bestLL = [...bsData.results].filter(r => !r.random).sort((a, b) => a.logloss - b.logloss)[0];
+          const randomEntry = bsData.results.find(r => r.random); const randomRank = bsData.results.indexOf(randomEntry) + 1;
+          const rows = bsData.results.slice(0, 20); const randomShown = rows.includes(randomEntry);
+          const rowOf = (r, rank) => (
+            <tr key={rank} style={{ background: r.random ? `${acc}14` : rank === 1 ? `${gn}11` : 'transparent', borderTop: r.random && !randomShown ? `1px dashed ${acc}66` : undefined }}>
+              <td style={{ padding: '3px 6px', textAlign: 'right', color: r.random ? acc : dm }}>{rank}</td>
+              <td style={{ padding: '3px 6px', fontWeight: 600, color: r.random ? acc : tx, fontStyle: r.random ? 'italic' : 'normal' }}>{r.random ? '🎲 Aleatório (1/3)' : RAT[r.rs]}</td>
+              <td style={{ padding: '3px 6px', textAlign: 'right', color: r.random ? dm : r.tl ? gn : dm }}>{r.random ? '—' : r.tl ? 'on' : '—'}</td>
+              <td style={{ padding: '3px 6px', textAlign: 'right', color: r.random ? dm : r.fv ? gn : dm }}>{r.random ? '—' : r.fv ? 'on' : '—'}</td>
+              <td style={{ padding: '3px 6px', textAlign: 'right', color: r.random ? dm : tx }}>{r.random ? '—' : r.hbv}</td>
+              <td style={{ padding: '3px 6px', textAlign: 'right', fontWeight: 700, color: r === best ? gn : r.random ? acc : tx }}>{r.brier.toFixed(4)}</td>
+              <td style={{ padding: '3px 6px', textAlign: 'right', color: r === bestLL ? bl : dm }}>{r.logloss.toFixed(4)}</td>
+            </tr>
+          );
+          return (
+            <div>
+              <div style={{ fontSize: '10px', color: dm, marginBottom: '6px' }}>Baseado em {bsData.n} jogos. {bsData.n < 12 && <span style={{ color: acc }}>Amostra pequena — resultados ainda ruidosos.</span>} Brier varia de 0 (perfeito) a 2; o modelo aleatório (🎲) é a linha de base — qualquer modelo abaixo dele tem skill.</div>
+              <div style={{ overflowX: 'auto' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '11px', minWidth: '440px' }}>
+                <thead><tr>{['#', 'Rating', 'Tilt', 'Favorit.', 'Mando', 'Brier ↓', 'Log-loss'].map(h => <th key={h} style={{ padding: '4px 6px', textAlign: h === 'Rating' ? 'left' : 'right', color: dm, fontSize: '9px', borderBottom: `1px solid ${bd}` }}>{h}</th>)}</tr></thead>
+                <tbody>
+                  {rows.map((r, i) => rowOf(r, i + 1))}
+                  {!randomShown && rowOf(randomEntry, randomRank)}
+                </tbody>
+              </table>
+              </div>
+              <div style={{ fontSize: '10px', color: dm, marginTop: '8px' }}>🏆 Melhor por Brier: <strong style={{ color: gn }}>{RAT[best.rs]}{best.tl ? ' +tilt' : ''}{best.fv ? ' +favorit.' : ''} · mando {best.hbv}</strong> (Brier {best.brier.toFixed(4)}). <strong style={{ color: acc }}>{bsData.nBeat}</strong> de 48 modelos superam o aleatório. Mostrando as 20 melhores de 48.</div>
+            </div>
+          );
+        })()}
+      </div>
+    );
   };
 
   // Série do gráfico de evolução ao vivo — memoizada pelos CAMPOS dos eventos/placar/acréscimos:
@@ -1516,8 +1650,9 @@ export default function WC2026() {
   const runBacktest = () => {
     setBsLoading(true);
     setTimeout(() => {
-      const sv = { rSys: _rSys, tilt: _useTilt, fav: _fav, hb: _hb, inj: _injM };
+      const sv = { rSys: _rSys, tilt: _useTilt, fav: _fav, hb: _hb, inj: _injM, dyn: _dynAdj };
       _injM = {}; // backtest histórico não aplica lesões (são prospectivas)
+      _dynAdj = {}; // mede o rating base puro — não o ajuste dinâmico derivado destes mesmos jogos (evita circularidade)
       const matches = [];
       GS.forEach(([gn, hi, ai, date, city], idx) => {
         const r = userRes[idx];
@@ -1536,7 +1671,7 @@ export default function WC2026() {
         const n = matches.length || 1;
         out.push({ rs, tl, fv, hbv, brier: brier / n, logloss: logloss / n });
       }
-      _rSys = sv.rSys; _useTilt = sv.tilt; _fav = sv.fav; _hb = sv.hb; _injM = sv.inj;
+      _rSys = sv.rSys; _useTilt = sv.tilt; _fav = sv.fav; _hb = sv.hb; _injM = sv.inj; _dynAdj = sv.dyn;
       // referência: modelo aleatório (1/3-1/3-1/3 em todo jogo) → Brier 2/3, log-loss ln(3)
       out.push({ rs: 'random', random: true, brier: 2 / 3, logloss: Math.log(3) });
       out.sort((a, b) => a.brier - b.brier);
@@ -1553,6 +1688,9 @@ export default function WC2026() {
   useEffect(() => { if (prevSpread.current !== spread) { prevSpread.current = spread; if (didRun.current) doMC(); } }, [spread]);
   const prevHb = useRef(homeAdv);
   useEffect(() => { if (prevHb.current !== homeAdv) { prevHb.current = homeAdv; if (didRun.current) doMC(); } }, [homeAdv]);
+  useEffect(() => { lsSave('dynElo', dynElo); }, [dynElo]);
+  const prevDyn = useRef(dynElo);
+  useEffect(() => { if (prevDyn.current !== dynElo) { prevDyn.current = dynElo; if (didRun.current) doMC(); } }, [dynElo]);
 
   const [probSort, setProbSort] = useState('ch');
   const [probSortDir, setProbSortDir] = useState(-1); // -1 = desc
@@ -1674,9 +1812,11 @@ export default function WC2026() {
         <select value={nSim} onChange={e => setNSim(+e.target.value)} style={{ padding: '5px 8px', background: card, color: tx, border: `1px solid ${bd}`, borderRadius: '5px', fontSize: '12px' }}>
           {[10000, 50000, 100000, 250000].map(n => <option key={n} value={n}>{n.toLocaleString()}</option>)}
         </select>
-        <button onClick={running ? cancelMC : doMC} title={running ? 'Clique para cancelar (mantém o resultado anterior)' : 'Rodar o Monte Carlo'} style={{ padding: '7px 16px', fontSize: '12px', fontWeight: 700, color: '#000', background: running ? `linear-gradient(90deg, ${gd} ${mcProg || 0}%, ${bd} ${mcProg || 0}%)` : `linear-gradient(135deg,${gd},${acc})`, border: 'none', borderRadius: '6px', cursor: 'pointer', minWidth: '92px' }}>
+        <button onClick={running ? cancelMC : doMC} title={running ? 'Clique para cancelar (mantém o resultado anterior)' : resultsDirty ? 'Há resultados digitados ainda não aplicados — clique para rerodar o Monte Carlo' : 'Rodar o Monte Carlo'} style={{ position: 'relative', padding: '7px 16px', fontSize: '12px', fontWeight: 700, color: '#000', background: running ? `linear-gradient(90deg, ${gd} ${mcProg || 0}%, ${bd} ${mcProg || 0}%)` : `linear-gradient(135deg,${gd},${acc})`, border: 'none', borderRadius: '6px', cursor: 'pointer', minWidth: '92px', boxShadow: resultsDirty && !running ? `0 0 0 2px ${rd}, 0 0 10px ${rd}99` : 'none' }}>
           {running ? (mcProg >= 100 ? '⏳ agregando…' : `⏳ ${mcProg || 0}% ✕`) : `▶ ${(+nSim || 0).toLocaleString()}`}
+          {resultsDirty && !running && <span style={{ position: 'absolute', top: '-5px', right: '-5px', width: '11px', height: '11px', borderRadius: '50%', background: rd, border: '2px solid #0d1220' }} />}
         </button>
+        {resultsDirty && !running && <span style={{ fontSize: '10px', fontWeight: 700, color: rd, whiteSpace: 'nowrap' }}>● resultados não aplicados</span>}
         <button onClick={doSingle} style={{ padding: '7px 14px', fontSize: '12px', fontWeight: 600, color: tx, background: card, border: `1px solid ${bd}`, borderRadius: '6px', cursor: 'pointer' }}>🎲 Simular 1 Copa</button>
         <select value={rSys} onChange={e => setRSys(e.target.value)} style={{ padding: '5px 8px', background: card, color: acc, border: `1px solid ${bd}`, borderRadius: '5px', fontSize: '11px', fontWeight: 600 }}>
           <option value="fifa">FIFA Ranking</option>
@@ -1694,6 +1834,11 @@ export default function WC2026() {
             {spread ? '⚽ Goleada ON' : '⚽ Goleada'}
           </button>
         </Tip>
+        <Tip text={`Elo dinâmico: atualiza a força de cada seleção a partir dos resultados de grupo já disputados (Elo, K=${DYN_K} fixo, sem margem de vitória). Some-se ao rating escolhido e afeta só os jogos ainda não disputados. Uma goleada passa a melhorar as chances futuras do time, não só o saldo. Conservador de propósito (amostra pequena); desligado por padrão.`}>
+          <button onClick={() => setDynElo(s => !s)} style={{ padding: '5px 9px', fontSize: '11px', fontWeight: 700, background: dynElo ? `${bl}33` : card, color: dynElo ? bl : dm, border: `1px solid ${dynElo ? bl : bd}`, borderRadius: '5px', cursor: 'pointer' }}>
+            {dynElo ? '📈 Elo dinâmico ON' : '📈 Elo dinâmico'}
+          </button>
+        </Tip>
         {nFx > 0 && <span style={{ fontSize: '10px', color: gn }}>✓ {nFx} fixo(s)</span>}
         {conditions.length > 0 && <span style={{ fontSize: '10px', color: acc }}>🔎 {conditions.length} condição(ões)</span>}
         {mcMeta && mcMeta.conds && mcMeta.conds.length > 0 && <span style={{ fontSize: '10px', color: mcMeta.nAccepted < 200 ? rd : gn }}>· {mcMeta.nAccepted.toLocaleString()}/{mcMeta.n.toLocaleString()} aceitas ({(mcMeta.nAccepted / mcMeta.n * 100).toFixed(1)}%)</span>}
@@ -1702,6 +1847,16 @@ export default function WC2026() {
         <span>⚠ {mcErr} — o resultado anterior foi mantido. Tente rodar de novo (se persistir, reduza o nº de simulações).</span>
         <button onClick={() => setMcErr(null)} style={{ background: 'transparent', border: 'none', color: rd, cursor: 'pointer', fontSize: '13px', lineHeight: 1, padding: 0 }}>✕</button>
       </div>}
+      {dynElo && res && (() => {
+        const movers = Object.entries(_dynAdj).filter(([, v]) => Math.abs(v) >= 0.5).sort((a, b) => Math.abs(b[1]) - Math.abs(a[1])).slice(0, 8);
+        if (!movers.length) return null;
+        return (
+          <div style={{ margin: '0 10px 6px', padding: '5px 10px', fontSize: '10px', color: dm, background: `${bl}10`, border: `1px solid ${bl}33`, borderRadius: '5px', display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }} title={`Ajuste dinâmico de Elo (K=${DYN_K}) aplicado sobre o rating base a partir dos resultados de grupo já disputados. Afeta só os jogos ainda não simulados.`}>
+            <span style={{ color: bl, fontWeight: 700 }}>📈 Elo dinâmico:</span>
+            {movers.map(([t, v]) => <span key={t} style={{ whiteSpace: 'nowrap' }}>{fl(t)} {nm(t)} <strong style={{ color: v > 0 ? gn : rd }}>{v > 0 ? '+' : ''}{Math.round(v)}</strong></span>)}
+          </div>
+        );
+      })()}
 
       {/* Tabs */}
       <nav style={{ display: 'flex', gap: '1px', padding: '5px 10px', background: '#0d1220', overflowX: 'auto', borderBottom: `1px solid ${bd}` }}>
@@ -2314,10 +2469,14 @@ export default function WC2026() {
               <SB active={muView === 'surpresas'} onClick={() => setMuView('surpresas')}>Surpresas</SB>
               <SB active={muView === 'evolucao'} onClick={() => setMuView('evolucao')}>Evolução</SB>
             </div>
+            {baseAgg && ['round', 'team', 'pos', 'combos', 'venue'].includes(muView) && (
+              <div style={{ fontSize: '9px', color: dm, marginBottom: '8px' }}>Os marcadores <span style={{ color: gn, fontWeight: 700 }}>▲</span>/<span style={{ color: rd, fontWeight: 700 }}>▼</span> mostram a variação em p.p. <strong style={{ color: tx }}>desde o início da Copa</strong> (vs simulação pré-Copa, sem resultados{dynElo ? ', já incluindo o efeito do Elo dinâmico' : ''}). Aparecem no modo absoluto.</div>
+            )}
 
             {muView === 'evolucao' && (() => {
               const teamsG = groups[evoGrp];
-              const ready = evoTbl && evoTbl.gn === evoGrp;
+              const tbl = evoAll[evoGrp];
+              const ready = !!tbl;
               const M = evoTblMetric;
               return (
                 <div>
@@ -2330,14 +2489,15 @@ export default function WC2026() {
                   <div style={{ display: 'flex', gap: '3px', alignItems: 'center', marginBottom: '8px', flexWrap: 'wrap' }}>
                     <span style={{ fontSize: '10px', color: dm }}>Métrica:</span>
                     {EVO_METRICS.map(([k, l]) => <button key={k} onClick={() => setEvoTblMetric(k)} style={{ padding: '2px 7px', fontSize: '10px', fontWeight: M === k ? 700 : 400, background: M === k ? `${acc}33` : 'transparent', color: M === k ? acc : dm, border: `1px solid ${M === k ? acc : bd}`, borderRadius: '4px', cursor: 'pointer' }}>{l}</button>)}
-                    <button onClick={() => computeGroupEvo(evoGrp)} disabled={evoTblLoading} style={{ marginLeft: '6px', padding: '4px 10px', fontSize: '10px', fontWeight: 700, color: '#000', background: acc, border: 'none', borderRadius: '4px', cursor: evoTblLoading ? 'wait' : 'pointer' }}>{evoTblLoading ? '⏳ calculando…' : ready ? '↻ recalcular' : `📊 calcular Grupo ${evoGrp}`}</button>
+                    <button onClick={() => computeGroupEvo(evoGrp)} disabled={evoTblLoading} title="Recalcula este grupo (os 12 são pré-preenchidos após cada simulação)" style={{ marginLeft: '6px', padding: '4px 10px', fontSize: '10px', fontWeight: 700, color: '#000', background: acc, border: 'none', borderRadius: '4px', cursor: evoTblLoading ? 'wait' : 'pointer' }}>{evoTblLoading ? '⏳ calculando…' : '↻ recalcular'}</button>
+                    {evoAllProg && <span style={{ fontSize: '9px', color: bl }}>pré-preenchendo grupos… {evoAllProg.done}/{evoAllProg.total}</span>}
                   </div>
-                  {!ready ? <div style={{ padding: '24px', textAlign: 'center', color: dm, fontSize: '11px' }}>{evoTblLoading ? 'Rodando snapshots…' : `Clique em "calcular Grupo ${evoGrp}" para ver a evolução.`}</div> : (() => {
-                    const snaps = evoTbl.snaps;
+                  {!ready ? <div style={{ padding: '24px', textAlign: 'center', color: dm, fontSize: '11px' }}>{evoTblLoading || evoAllProg ? 'Rodando snapshots…' : 'Rode a simulação (▶) para pré-preencher os 12 grupos.'}</div> : (() => {
+                    const snaps = tbl.snaps;
                     const mLabel = EVO_METRICS.find(([k]) => k === M)?.[1] || M;
                     return (
                       <div style={{ overflowX: 'auto', maxWidth: '100%' }}>
-                        <div style={{ fontSize: '9px', color: dm, marginBottom: '4px' }}>Grupo {evoTbl.gn} • métrica: <strong style={{ color: acc }}>{mLabel}</strong> (% por time) • {evoTbl.sims.toLocaleString()} sims/coluna • {snaps.length} coluna(s){snaps.length === 1 ? ' — preencha jogos deste grupo para ver a evolução' : ''}</div>
+                        <div style={{ fontSize: '9px', color: dm, marginBottom: '4px' }}>Grupo {tbl.gn} • métrica: <strong style={{ color: acc }}>{mLabel}</strong> (% por time) • {tbl.sims.toLocaleString()} sims/coluna • {snaps.length} coluna(s){snaps.length === 1 ? ' — preencha jogos deste grupo para ver a evolução' : ''}</div>
                         <table style={{ borderCollapse: 'collapse', fontSize: '11px', minWidth: '320px' }}>
                           <thead><tr>
                             <th style={{ textAlign: 'left', padding: '4px 8px', color: dm, fontSize: '9px', fontWeight: 600, borderBottom: `1px solid ${bd}`, position: 'sticky', left: 0, background: card }}>Time</th>
@@ -2454,6 +2614,13 @@ export default function WC2026() {
                       </div>
                       <div style={{ fontSize: '8px', color: dm, marginTop: '6px', lineHeight: 1.4 }}>{gainBits > 0.02 ? `O modelo está ${skill.toFixed(0)}% melhor que chutar V/E/D no acaso (resultado)` : gainBits < -0.02 ? 'O modelo está pior que o acaso no resultado nestes jogos (zebras concentradas ou poucos jogos)' : 'O modelo está empatado com o acaso no resultado aqui'}; no placar, {gainScore > 0.02 ? `${skillScore.toFixed(0)}% melhor` : gainScore < -0.02 ? 'pior' : 'empatado'} que um jogo médio sem info de time. Tudo medido sem o modelo ver o resultado (90 min).</div>
                     </div>
+                    <div style={{ marginBottom: '10px', border: `1px solid ${surModels ? bl : bd}55`, borderRadius: '6px', overflow: 'hidden' }}>
+                      <div onClick={() => setSurModels(s => !s)} style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '7px 10px', background: `${bl}10`, cursor: 'pointer' }}>
+                        <span style={{ fontSize: '11px', fontWeight: 700, color: bl }}>{surModels ? '▾' : '▸'} 🔬 Comparar modelos (qual previu melhor os jogos já realizados)</span>
+                        <span style={{ fontSize: '9px', color: dm, marginLeft: 'auto' }}>Brier / log-loss por rating × tilt × favoritismo × mando</span>
+                      </div>
+                      {surModels && <div style={{ padding: '10px' }}>{renderModelBacktest()}</div>}
+                    </div>
                     <div style={{ display: 'flex', gap: '6px', alignItems: 'center', marginBottom: '8px', flexWrap: 'wrap' }}>
                       <span style={{ fontSize: '9px', color: dm }}>Ordenar:</span>
                       <SB active={surSort === 'bits'} onClick={() => setSurSort('bits')}>↓ Surpresa placar</SB>
@@ -2533,7 +2700,7 @@ export default function WC2026() {
                     <div key={i} style={{ display: 'grid', gridTemplateColumns: '28px 1fr auto', alignItems: 'center', padding: '4px 8px', background: i < 3 ? `${gd}08` : i % 2 === 0 ? card : '#0d111d', borderRadius: '4px' }}>
                       <span style={{ fontSize: '10px', color: i < 3 ? gd : dm }}>#{i + 1}</span>
                       <span style={{ fontSize: '11px' }}>{fl(m.a)} {nm(m.a)} <span style={{ color: dm }}>vs</span> {fl(m.b)} {nm(m.b)}</span>
-                      <span style={{ fontSize: '11px', fontWeight: 700, color: i < 3 ? gd : acc, minWidth: '42px', textAlign: 'right' }}>{m.pct.toFixed(1)}%</span>
+                      <span style={{ fontSize: '11px', fontWeight: 700, color: i < 3 ? gd : acc, minWidth: '42px', textAlign: 'right' }}>{m.pct.toFixed(1)}%{dTag(m.pct, basePairPct(baseAgg?.muPct?.[muRound], m.a, m.b))}</span>
                     </div>
                   );
                 })}
@@ -2614,14 +2781,14 @@ export default function WC2026() {
                     <div key={rd} style={{ background: card, borderRadius: '6px', border: `1px solid ${bd}`, padding: '8px' }}>
                       <div style={{ fontSize: '11px', fontWeight: 700, color: acc, marginBottom: '4px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                         <span>{labels[rd]}{avgElo > 0 && <span style={{ fontSize: '8px', color: dm, fontWeight: 400, marginLeft: '4px' }}>~{Math.round(avgElo)}</span>}</span>
-                        <span style={{ color: denom > 50 ? '#22c55e' : denom > 20 ? '#c9a84c' : '#ef4444', fontSize: '10px' }}>Chega: {denom.toFixed(1)}%</span>
+                        <span style={{ color: denom > 50 ? '#22c55e' : denom > 20 ? '#c9a84c' : '#ef4444', fontSize: '10px' }}>Chega: {denom.toFixed(1)}%{!condMode && !activePos2 && dTag(denom, baseAgg?.p?.[selTeam]?.[rd])}</span>
                       </div>
                       {items.map((x, i) => {
                         const display = condMode && denom > 0 ? (x.pct / denom * 100) : x.pct;
                         return (
                           <div key={i} style={{ display: 'flex', justifyContent: 'space-between', padding: '2px 0', fontSize: '11px' }}>
                             <span style={tmMode === 'pos' ? { fontFamily: 'monospace', color: bl } : {}}><span style={{ fontSize: '8px', color: dm, marginRight: '3px' }}>{i+1}.</span>{x.label}</span>
-                            <span style={{ color: acc, fontWeight: 600 }}>{display.toFixed(1)}%</span>
+                            <span style={{ color: acc, fontWeight: 600 }}>{display.toFixed(1)}%{!condMode && tmMode === 'team' && !activePos2 && x.team && dTag(x.pct, (baseAgg?.tmPct?.[selTeam]?.[rd] || []).find(o => o.o === x.team)?.pct ?? 0)}</span>
                           </div>
                         );
                       })}
@@ -2768,7 +2935,7 @@ export default function WC2026() {
                           <span><span style={{ fontSize: '8px', color: dm, marginRight: '3px' }}>{i+1}.</span><span style={{ fontWeight: 600, fontFamily: 'monospace', color: i < 3 ? bl : tx }}>{m.k}</span></span>
                           {m.t1 && m.t2 && <span style={{ color: dm, fontSize: '9px', marginLeft: '6px' }}>{fl(m.t1)}{nm(m.t1)} vs {fl(m.t2)}{nm(m.t2)}</span>}
                         </div>
-                        <span style={{ fontWeight: 700, color: i < 3 ? bl : acc }}>{m.pct.toFixed(1)}%</span>
+                        <span style={{ fontWeight: 700, color: i < 3 ? bl : acc }}>{m.pct.toFixed(1)}%{dTag(m.pct, baseAgg?.posMu?.[muRound] ? (baseAgg.posMu[muRound][m.k] || 0) / baseN * 100 : null)}</span>
                       </div>
                     ))}
                 </div>
@@ -2865,6 +3032,7 @@ export default function WC2026() {
                   <div style={{ background: card, borderRadius: '6px', border: `1px solid ${hasFilter ? bl : bd}44`, padding: '8px 12px', marginBottom: '8px', display: 'flex', alignItems: 'baseline', gap: '10px', flexWrap: 'wrap' }}>
                     <div>
                       <span style={{ fontSize: '18px', fontWeight: 700, color: hasFilter ? bl : tx }}>{totalPct.toFixed(1)}%</span>
+                      {dTag(totalPct, baseAgg?.comboList ? filtered.reduce((s, c) => s + (baseComboPct(c.key) || 0), 0) : null)}
                       <span style={{ fontSize: '9px', color: dm, marginLeft: '6px' }}>das simulações</span>
                     </div>
                     <div style={{ fontSize: '10px', color: dm }}>
@@ -2878,7 +3046,7 @@ export default function WC2026() {
                       return (
                         <div key={i} style={{ display: 'flex', justifyContent: 'space-between', padding: '5px 8px', background: i < 3 ? `${bl}0a` : i % 2 === 0 ? card : '#0d111d', borderRadius: '4px', fontSize: '11px' }}>
                           <div><span style={{ fontSize: '8px', color: dm, marginRight: '3px' }}>{i+1}.</span><span style={{ color: gn, fontWeight: 600, letterSpacing: '1px' }}>{c.key}</span> <span style={{ color: dm, fontSize: '9px' }}>(elim: <span style={{ color: rd }}>{elim.join('')}</span>)</span></div>
-                          <span style={{ fontWeight: 700, color: i < 3 ? bl : acc }}>{condMode && totalPct > 0 ? normPct.toFixed(1) : c.pct.toFixed(1)}%</span>
+                          <span style={{ fontWeight: 700, color: i < 3 ? bl : acc }}>{condMode && totalPct > 0 ? normPct.toFixed(1) : c.pct.toFixed(1)}%{!condMode && dTag(c.pct, baseComboPct(c.key))}</span>
                         </div>
                       );
                     })}
@@ -2921,7 +3089,11 @@ export default function WC2026() {
               }
               const useFiltered = hasG3F && Object.keys(filteredPairs).length > 0;
               const dn = useFiltered ? filteredN : nSim;
-              const pairs = (useFiltered ? Object.entries(filteredPairs) : (matchTmData[mn] ? Object.entries(matchTmData[mn]) : [])).map(([k, c]) => { const [a, b] = k.split('|'); return { a, b, pct: (c / dn) * 100 }; }).sort((x, y) => y.pct - x.pct);
+              const pairs = (useFiltered ? Object.entries(filteredPairs) : (matchTmData[mn] ? Object.entries(matchTmData[mn]) : [])).map(([k, c]) => { const [a, b] = k.split('|'); return { a, b, key: k, pct: (c / dn) * 100 }; }).sort((x, y) => y.pct - x.pct);
+              // Baseline pré-Copa do mesmo par/seleção neste jogo (só faz sentido sem filtro de 3ºs).
+              const baseMatch = (!useFiltered && baseAgg?.matchTm?.[mn]) ? baseAgg.matchTm[mn] : null;
+              const basePairAt = (key) => baseMatch ? (baseMatch[key] || 0) / baseN * 100 : null;
+              const baseTeamAt = (t) => baseMatch ? Object.entries(baseMatch).reduce((s, [k, c]) => { const [a, b] = k.split('|'); return s + (a === t || b === t ? c : 0); }, 0) / baseN * 100 : null;
               // Derive teams from pairs
               const teamMap = {};
               pairs.forEach(p => { teamMap[p.a] = (teamMap[p.a]||0) + p.pct; teamMap[p.b] = (teamMap[p.b]||0) + p.pct; });
@@ -2983,7 +3155,7 @@ export default function WC2026() {
                       {pairs.slice(0, 100).map((p, i) => (
                         <div key={i} style={{ display: 'flex', justifyContent: 'space-between', padding: '3px 6px', background: i < 3 ? `${bl}0a` : i % 2 === 0 ? 'transparent' : '#0d111d', borderRadius: '3px', fontSize: '11px' }}>
                           <span>{fl(p.a)} {nm(p.a)} <span style={{ color: dm }}>vs</span> {fl(p.b)} {nm(p.b)}</span>
-                          <span style={{ color: i < 3 ? bl : acc, fontWeight: 600, minWidth: '42px', textAlign: 'right' }}>{p.pct.toFixed(1)}%</span>
+                          <span style={{ color: i < 3 ? bl : acc, fontWeight: 600, minWidth: '42px', textAlign: 'right' }}>{p.pct.toFixed(1)}%{dTag(p.pct, basePairAt(p.key))}</span>
                         </div>
                       ))}
                     </div>
@@ -2994,7 +3166,7 @@ export default function WC2026() {
                       {teams.slice(0, 100).map((x, i) => (
                         <div key={i} style={{ display: 'flex', justifyContent: 'space-between', padding: '3px 6px', background: i < 3 ? `${bl}0a` : i % 2 === 0 ? 'transparent' : '#0d111d', borderRadius: '3px', fontSize: '11px' }}>
                           <span>{fl(x.t)} {nm(x.t)}</span>
-                          <span style={{ color: i < 3 ? bl : acc, fontWeight: 600, minWidth: '42px', textAlign: 'right' }}>{x.pct.toFixed(1)}%</span>
+                          <span style={{ color: i < 3 ? bl : acc, fontWeight: 600, minWidth: '42px', textAlign: 'right' }}>{x.pct.toFixed(1)}%{dTag(x.pct, baseTeamAt(x.t))}</span>
                         </div>
                       ))}
                     </div>
@@ -3745,7 +3917,7 @@ export default function WC2026() {
               const teams = all.slice().sort((a, b) => (res?.[b]?.ch || 0) - (res?.[a]?.ch || 0));
               return (<>
                 <div style={{ fontSize: '9px', color: dm, marginBottom: '10px' }}>
-                  Para cada time e cada posição no grupo (1°/2°/3°): o adversário mais provável em cada fase do mata-mata (com a % de enfrentá-lo, dado que chegou à fase) e a chance condicional de título se terminar naquela posição. Empilhado, ordenado por chance de título.
+                  Para cada time e cada posição no grupo (1°/2°/3°): o adversário mais provável em cada fase do mata-mata (com a % de enfrentá-lo, dado que chegou à fase) e a chance condicional de título se terminar naquela posição. <strong style={{ color: bl }}>Elo méd. caminho</strong> = força média dos adversários ao longo da rota (cada fase ~Elo ponderado por frequência). Empilhado, ordenado por chance de título.
                 </div>
                 <div style={{ display: 'grid', gap: '10px' }}>
                   {teams.map(team => {
@@ -3765,9 +3937,14 @@ export default function WC2026() {
                         ent.sort((a, b) => b[1] - a[1]);
                         const [opp, cnt] = ent[0];
                         const reached = ent.reduce((s, [, c]) => s + c, 0);
-                        return { opp, faceProb: reached ? (cnt / reached) * 100 : 0 };
+                        // Elo médio dos adversários nesta fase, ponderado por quantas vezes cada um aparece.
+                        const avgElo = reached ? ent.reduce((s, [o, c]) => s + rt(o) * c, 0) / reached : 0;
+                        return { opp, faceProb: reached ? (cnt / reached) * 100 : 0, avgElo };
                       });
-                      return { pn, finishFreq, condCh, path };
+                      // Elo médio do caminho = média das fases alcançadas (peso igual por fase).
+                      const eloSteps = path.filter(s => s && s.avgElo > 0);
+                      const pathElo = eloSteps.length ? Math.round(eloSteps.reduce((s, x) => s + x.avgElo, 0) / eloSteps.length) : 0;
+                      return { pn, finishFreq, condCh, path, pathElo };
                     }).filter(Boolean);
                     if (!rows.length) return null;
                     return (
@@ -3784,6 +3961,7 @@ export default function WC2026() {
                                 <span style={{ fontWeight: 700, color: acc }}>{posLabel[r.pn]}</span>
                                 <span style={{ color: dm }}> · termina {r.finishFreq.toFixed(0)}%</span>
                                 <div style={{ color: gd, fontWeight: 700, fontSize: '11px' }}>🏆 {r.condCh.toFixed(1)}%</div>
+                                {r.pathElo > 0 && <div style={{ color: bl, fontSize: '9px', fontWeight: 600 }} title="Elo médio dos adversários ao longo do caminho mais provável (média das fases alcançadas, ponderada pela frequência de cada adversário).">Elo méd. caminho: {r.pathElo}</div>}
                               </div>
                               <div style={{ fontSize: '10px', display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '2px' }}>
                                 {RDS.map(([rk, rl], j) => {
@@ -3792,7 +3970,7 @@ export default function WC2026() {
                                     <span key={rk} style={{ whiteSpace: 'nowrap', display: 'inline-flex', alignItems: 'center' }}>
                                       {j > 0 && <span style={{ color: dm, margin: '0 3px' }}>→</span>}
                                       <span style={{ color: dm, fontSize: '8px', marginRight: '2px' }}>{rl}</span>
-                                      {step ? <>{fl(step.opp)} {nm(step.opp)} <span style={{ color: dm }}>{step.faceProb.toFixed(0)}%</span></> : <span style={{ color: dm }}>—</span>}
+                                      {step ? <>{fl(step.opp)} {nm(step.opp)} <span style={{ color: dm }}>{step.faceProb.toFixed(0)}%</span>{step.avgElo > 0 && <span style={{ color: bl, fontSize: '8px', marginLeft: '2px' }}>~{Math.round(step.avgElo)}</span>}</> : <span style={{ color: dm }}>—</span>}
                                     </span>
                                   );
                                 })}
@@ -3812,6 +3990,12 @@ export default function WC2026() {
           <div style={cs}>
             <div style={{ fontSize: '13px', fontWeight: 700, marginBottom: '4px', color: acc }}>📝 Resultados & Probabilidades</div>
             <div style={{ fontSize: '10px', color: dm, marginBottom: '8px' }}>{nFxGS}/{GS.length} grupos • {nFxKO}/32 mata-mata preenchidos. Preencha e rode a simulação.</div>
+            {resultsDirty && !running && (
+              <div onClick={doMC} title="Clique para rerodar o Monte Carlo com os resultados atuais" style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '7px 10px', marginBottom: '10px', background: `${rd}1a`, border: `1px solid ${rd}66`, borderRadius: '6px', cursor: 'pointer' }}>
+                <span style={{ fontSize: '14px' }}>⚠️</span>
+                <span style={{ fontSize: '11px', color: tx, fontWeight: 600 }}>Resultados digitados ainda <strong style={{ color: rd }}>não aplicados</strong> às probabilidades. <span style={{ color: acc }}>Clique aqui (ou em ▶ no topo) para rerodar.</span></span>
+              </div>
+            )}
             <div style={{ display: 'flex', gap: '3px', marginBottom: '10px', flexWrap: 'wrap' }}>
               <SB active={resView === 'games'} onClick={() => setResView('games')}>⚽ Jogos</SB>
               <SB active={resView === 'standings'} onClick={() => setResView('standings')}>📊 Classificação</SB>
@@ -4661,47 +4845,7 @@ export default function WC2026() {
             )}
             </>)}
 
-            {evoView === 'models' && (() => {
-              const nFilled = GS.reduce((s, _, idx) => s + ((userRes[idx]?.gA != null && userRes[idx]?.gB != null) ? 1 : 0), 0);
-              const RAT = { fifa: 'FIFA', elo: 'Elo', bet: 'Apostas', pele: 'PELE' };
-              return (
-                <div>
-                  <div style={{ fontSize: '11px', color: dm, marginBottom: '10px', lineHeight: 1.5 }}>Compara 48 configurações de modelo (4 ratings × tilt on/off × favoritismo on/off × mando 0/70/150) contra os <strong>{nFilled}</strong> jogos de fase de grupos já preenchidos, medindo <strong>Brier</strong> e <strong>log-loss</strong> (menor = melhor). Útil para descobrir qual modelo está acertando mais durante a Copa. Lesões não entram (são prospectivas).</div>
-                  <button onClick={runBacktest} disabled={bsLoading || nFilled < 1} style={{ padding: '7px 14px', fontSize: '12px', fontWeight: 700, background: nFilled < 1 ? card : `${acc}33`, color: nFilled < 1 ? dm : acc, border: `1px solid ${nFilled < 1 ? bd : acc}`, borderRadius: '5px', cursor: nFilled < 1 ? 'default' : 'pointer', marginBottom: '12px' }}>{bsLoading ? 'Calculando…' : nFilled < 1 ? 'Preencha resultados de grupo primeiro' : `🔬 Rodar backtest (${nFilled} jogos)`}</button>
-                  {bsData && bsData.n > 0 && (() => {
-                    const best = bsData.results.find(r => !r.random); const bestLL = [...bsData.results].filter(r => !r.random).sort((a, b) => a.logloss - b.logloss)[0];
-                    const randomEntry = bsData.results.find(r => r.random); const randomRank = bsData.results.indexOf(randomEntry) + 1;
-                    const rows = bsData.results.slice(0, 20); const randomShown = rows.includes(randomEntry);
-                    const rowOf = (r, rank) => (
-                      <tr key={rank} style={{ background: r.random ? `${acc}14` : rank === 1 ? `${gn}11` : 'transparent', borderTop: r.random && !randomShown ? `1px dashed ${acc}66` : undefined }}>
-                        <td style={{ padding: '3px 6px', textAlign: 'right', color: r.random ? acc : dm }}>{rank}</td>
-                        <td style={{ padding: '3px 6px', fontWeight: 600, color: r.random ? acc : tx, fontStyle: r.random ? 'italic' : 'normal' }}>{r.random ? '🎲 Aleatório (1/3)' : RAT[r.rs]}</td>
-                        <td style={{ padding: '3px 6px', textAlign: 'right', color: r.random ? dm : r.tl ? gn : dm }}>{r.random ? '—' : r.tl ? 'on' : '—'}</td>
-                        <td style={{ padding: '3px 6px', textAlign: 'right', color: r.random ? dm : r.fv ? gn : dm }}>{r.random ? '—' : r.fv ? 'on' : '—'}</td>
-                        <td style={{ padding: '3px 6px', textAlign: 'right', color: r.random ? dm : tx }}>{r.random ? '—' : r.hbv}</td>
-                        <td style={{ padding: '3px 6px', textAlign: 'right', fontWeight: 700, color: r === best ? gn : r.random ? acc : tx }}>{r.brier.toFixed(4)}</td>
-                        <td style={{ padding: '3px 6px', textAlign: 'right', color: r === bestLL ? bl : dm }}>{r.logloss.toFixed(4)}</td>
-                      </tr>
-                    );
-                    return (
-                      <div>
-                        <div style={{ fontSize: '10px', color: dm, marginBottom: '6px' }}>Baseado em {bsData.n} jogos. {bsData.n < 12 && <span style={{ color: acc }}>Amostra pequena — resultados ainda ruidosos.</span>} Brier varia de 0 (perfeito) a 2; o modelo aleatório (🎲) é a linha de base — qualquer modelo abaixo dele tem skill.</div>
-                        <div style={{ overflowX: 'auto' }}>
-                        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '11px', minWidth: '440px' }}>
-                          <thead><tr>{['#', 'Rating', 'Tilt', 'Favorit.', 'Mando', 'Brier ↓', 'Log-loss'].map(h => <th key={h} style={{ padding: '4px 6px', textAlign: h === 'Rating' ? 'left' : 'right', color: dm, fontSize: '9px', borderBottom: `1px solid ${bd}` }}>{h}</th>)}</tr></thead>
-                          <tbody>
-                            {rows.map((r, i) => rowOf(r, i + 1))}
-                            {!randomShown && rowOf(randomEntry, randomRank)}
-                          </tbody>
-                        </table>
-                        </div>
-                        <div style={{ fontSize: '10px', color: dm, marginTop: '8px' }}>🏆 Melhor por Brier: <strong style={{ color: gn }}>{RAT[best.rs]}{best.tl ? ' +tilt' : ''}{best.fv ? ' +favorit.' : ''} · mando {best.hbv}</strong> (Brier {best.brier.toFixed(4)}). <strong style={{ color: acc }}>{bsData.nBeat}</strong> de 48 modelos superam o aleatório. Mostrando as 20 melhores de 48.</div>
-                      </div>
-                    );
-                  })()}
-                </div>
-              );
-            })()}
+            {evoView === 'models' && renderModelBacktest()}
           </div>
         )}
 
