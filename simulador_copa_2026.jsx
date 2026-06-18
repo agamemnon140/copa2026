@@ -1180,7 +1180,7 @@ export default function WC2026() {
       const NB = Math.min(Math.max(100, Math.floor(+nSim) || 10000), 30000);
       const r = runMC(groups, NB, {}, []);
       _dynAdj = svDyn; // restaura p/ render (rt) e demais cálculos seguirem com o ajuste vigente
-      setBaseAgg({ p: r.p, g3p: r.g3p, muPct: r.muPct, comboList: r.comboList, tmPct: r.tmPct, posMu: r.posMu, matchTm: r.matchTm, posTm: r.posTm, posVsTm: r.posVsTm, cutoff3rd: r.cutoff3rd, tpc: r.tpc, matchWho: r.matchWho, n: NB });
+      setBaseAgg({ p: r.p, g3p: r.g3p, muPct: r.muPct, comboList: r.comboList, tmPct: r.tmPct, posMu: r.posMu, matchTm: r.matchTm, posTm: r.posTm, posVsTm: r.posVsTm, tmPos: r.tmPos, cutoff3rd: r.cutoff3rd, tpc: r.tpc, matchWho: r.matchWho, n: NB });
     } catch (err) { /* baseline é só indicador; falha não quebra o app */ }
   };
   const maybeBaseline = () => { const mk = modelKey(); if (baseKeyRef.current !== mk) { baseKeyRef.current = mk; computeBaseline(); } };
@@ -2525,6 +2525,7 @@ export default function WC2026() {
               <SB active={muView === 'pos'} onClick={() => setMuView('pos')}>Por Posição</SB>
               <SB active={muView === 'combos'} onClick={() => setMuView('combos')}>Combinações 3°s</SB>
               <SB active={muView === 'venue'} onClick={() => setMuView('venue')}>Por Jogo/Sede</SB>
+              <SB active={muView === 'estadio'} onClick={() => setMuView('estadio')}>Por Estádio</SB>
               <SB active={muView === 'elo'} onClick={() => setMuView('elo')}>Elo Jogos</SB>
               <SB active={muView === 'duel'} onClick={() => setMuView('duel')}>Duelo</SB>
               <SB active={muView === 'cutoff'} onClick={() => setMuView('cutoff')}>Corte 3°</SB>
@@ -2896,7 +2897,7 @@ export default function WC2026() {
                         return (
                           <div key={i} style={{ display: 'flex', justifyContent: 'space-between', padding: '2px 0', fontSize: '11px' }}>
                             <span style={tmMode === 'pos' ? { fontFamily: 'monospace', color: bl } : {}}><span style={{ fontSize: '8px', color: dm, marginRight: '3px' }}>{i+1}.</span>{x.label}</span>
-                            <span style={{ color: acc, fontWeight: 600 }}>{display.toFixed(1)}%{!condMode && tmMode === 'team' && !activePos2 && x.team && dTag(x.pct, (baseAgg?.tmPct?.[selTeam]?.[rd] || []).find(o => o.o === x.team)?.pct ?? 0)}</span>
+                            <span style={{ color: acc, fontWeight: 600 }}>{display.toFixed(1)}%{!condMode && !activePos2 && (tmMode === 'team' && x.team ? dTag(x.pct, (baseAgg?.tmPct?.[selTeam]?.[rd] || []).find(o => o.o === x.team)?.pct ?? 0) : tmMode === 'pos' ? dTag(x.pct, baseAgg?.tmPos?.[selTeam]?.[rd] ? (baseAgg.tmPos[selTeam][rd][x.label] || 0) / baseN * 100 : null) : null)}</span>
                           </div>
                         );
                       })}
@@ -2990,7 +2991,7 @@ export default function WC2026() {
                               return (
                               <div key={g.mn} style={{ display: 'flex', justifyContent: 'space-between', padding: '2px 0', fontSize: '11px' }}>
                                 <span style={{ color: dm }}><span style={{ fontSize: '8px', marginRight: '3px' }}>{i+1}.</span>M{g.mn} {DOW(g.date)} {g.date} {g.brt} BRT <span style={{ color: bl }}>{g.city}</span></span>
-                                <span style={{ fontWeight: 600, color: acc }}>{display.toFixed(1)}%</span>
+                                <span style={{ fontWeight: 600, color: acc }}>{display.toFixed(1)}%{!condMode && !activePos && dTag(g.raw, baseAgg?.matchWho?.[g.mn] ? (baseAgg.matchWho[g.mn][selTeam] || 0) / baseN * 100 : null)}</span>
                               </div>
                               );
                             })}
@@ -3164,7 +3165,88 @@ export default function WC2026() {
                   {filtered.length > 20 && <div style={{ fontSize: '9px', color: dm, marginTop: '6px' }}>Mostrando as 20 mais prováveis de {filtered.length} — mas a soma de {totalPct.toFixed(1)}% acima considera <strong>todas</strong>.</div>}
                 </>;
               })()}
+              {/* Calculadora 1° vs 3° — probabilística (chance de cada cruzamento ocorrer) + Δ vs início */}
+              {(() => {
+                const W8 = ['A', 'B', 'D', 'E', 'G', 'I', 'K', 'L'];
+                const KO_OF = { A: 79, B: 85, D: 81, E: 74, G: 82, I: 77, K: 87, L: 80 }; // jogo R32 de cada 1º que pega um 3º
+                const accCross = (list) => { const t = {}; W8.forEach(w => t[w] = {}); if (list) list.forEach(c => { const a = AC[c.key]; if (!a) return; for (let i = 0; i < 8; i++) t[W8[i]][a[i]] = (t[W8[i]][a[i]] || 0) + c.pct; }); return t; };
+                const cross = accCross(comboList), crossB = baseAgg ? accCross(baseAgg.comboList) : null;
+                const cols = [...'ABCDEFGHIJKL'];
+                return (
+                  <div style={{ marginTop: '16px', borderTop: `1px solid ${bd}`, paddingTop: '10px' }}>
+                    <div style={{ fontSize: '12px', fontWeight: 700, color: bl, marginBottom: '3px' }}>Calculadora 1° vs 3° — probabilidade de cada cruzamento</div>
+                    <div style={{ fontSize: '9px', color: dm, marginBottom: '8px', maxWidth: '760px' }}>Chance de cada 1° de grupo (linha) enfrentar o 3° de cada grupo (coluna) no R32, conforme as combinações de 3ºs que avançam (Anexo C). {baseAgg ? <>O <span style={{ color: gn, fontWeight: 700 }}>▲</span>/<span style={{ color: rd, fontWeight: 700 }}>▼</span> é a variação em p.p. <strong style={{ color: tx }}>desde o início da Copa</strong>.</> : 'Rode a simulação para os deltas.'}</div>
+                    <div style={{ overflowX: 'auto' }}>
+                      <table style={{ borderCollapse: 'collapse', fontSize: '9px' }}>
+                        <thead><tr style={{ borderBottom: `1px solid ${bd}` }}>
+                          <th style={{ padding: '3px 6px', textAlign: 'left', color: dm, position: 'sticky', left: 0, background: card }}>1° de</th>
+                          {cols.map(g => <th key={g} style={{ padding: '3px 5px', color: dm, textAlign: 'center', minWidth: '42px' }}>3°{g}</th>)}
+                        </tr></thead>
+                        <tbody>{W8.map((w, ri) => (
+                          <tr key={w} style={{ background: ri % 2 ? '#0d111d' : 'transparent' }}>
+                            <td style={{ padding: '3px 6px', fontWeight: 700, color: acc, position: 'sticky', left: 0, background: ri % 2 ? '#0d111d' : card }}>1°{w} <span style={{ fontSize: '7px', color: dm, fontWeight: 400 }}>M{KO_OF[w]}</span></td>
+                            {cols.map(g => {
+                              const pct = cross[w][g] || 0;
+                              const base = crossB ? (crossB[w][g] || 0) : null;
+                              if (pct < 0.05 && (!base || base < 0.05)) return <td key={g} style={{ padding: '3px 5px', textAlign: 'center', color: `${bd}88` }}>·</td>;
+                              return <td key={g} style={{ padding: '3px 5px', textAlign: 'center', color: pct > 40 ? gn : pct > 15 ? bl : tx, fontWeight: pct > 40 ? 700 : 400, whiteSpace: 'nowrap' }}>{pct.toFixed(0)}%{base != null && dTag(pct, base)}</td>;
+                            })}
+                          </tr>
+                        ))}</tbody>
+                      </table>
+                    </div>
+                    <div style={{ fontSize: '8px', color: dm, marginTop: '4px' }}>Cada linha soma ~100% (o 1° sempre pega algum 3°). Células em branco (·) = cruzamento impossível pelo Anexo C.</div>
+                  </div>
+                );
+              })()}
             </>)}
+
+            {muView === 'estadio' && (() => {
+              // Agrupa todos os jogos por sede. GS: times e placar reais. KO: confronto/Elo esperados (MC).
+              const venues = {};
+              const add = (city, m) => { if (!venues[city]) venues[city] = { city, matches: [], eloSum: 0, eloN: 0 }; venues[city].matches.push(m); if (m.elo) { venues[city].eloSum += m.elo; venues[city].eloN++; } };
+              GS.forEach(([gn, hi, ai, date, city], idx) => {
+                const h = groups[gn][hi], a = groups[gn][ai], rr = userRes[idx];
+                add(city, { type: 'gs', mn: idx + 1, date, gn, h, a, elo: (rt(h) + rt(a)) / 2, res: rr && rr.gA != null && rr.gB != null ? `${rr.gA}-${rr.gB}` : null });
+              });
+              for (let mn = 73; mn <= 104; mn++) {
+                const city = KO_CITY[mn]; let elo = 0; const who = matchWhoData?.[mn];
+                if (who) { let s = 0, n = 0; Object.entries(who).forEach(([t, c]) => { s += rt(t) * c; n += c; }); if (n > 0) elo = s / n; }
+                const pair = matchTmData?.[mn] ? Object.entries(matchTmData[mn]).sort((a, b) => b[1] - a[1])[0] : null;
+                const topPair = pair ? pair[0].split('|') : null;
+                const rr = userRes['k' + mn];
+                add(city, { type: 'ko', mn, date: KO_DATE[mn], phase: KO_SPEC[mn]?.l, elo, topPair, res: rr && rr.gA != null && rr.gB != null ? `${rr.gA}-${rr.gB}` : null });
+              }
+              const list = Object.values(venues).map(v => ({ ...v, avgElo: v.eloN ? Math.round(v.eloSum / v.eloN) : 0 }));
+              list.forEach(v => v.matches.sort((x, y) => dateKey(x.date) - dateKey(y.date)));
+              list.sort((a, b) => b.avgElo - a.avgElo);
+              return (
+                <div>
+                  <div style={{ fontSize: '12px', fontWeight: 700, color: bl, marginBottom: '4px' }}>🏟️ Por estádio (sede)</div>
+                  <div style={{ fontSize: '10px', color: dm, marginBottom: '10px', maxWidth: '760px' }}>Jogos de cada sede com placar (quando já disputado) e o <strong>Elo médio dos confrontos</strong> ali. Fase de grupos: times e placar reais. Mata-mata: confronto/Elo esperados pelo MC. Ordenado por Elo médio da sede.</div>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(330px,1fr))', gap: '8px' }}>
+                    {list.map(v => (
+                      <div key={v.city} style={{ background: card, borderRadius: '6px', border: `1px solid ${bd}`, padding: '8px 10px' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: '4px' }}>
+                          <span style={{ fontSize: '12px', fontWeight: 700, color: tx }}>{v.city}</span>
+                          <span style={{ fontSize: '10px', color: bl, fontWeight: 600 }} title="Elo médio dos confrontos nesta sede">Elo méd. {v.avgElo} · {v.matches.length}j</span>
+                        </div>
+                        {v.matches.map(m => (
+                          <div key={m.type + m.mn} style={{ display: 'grid', gridTemplateColumns: '1fr 46px 34px', gap: '4px', alignItems: 'center', fontSize: '10px', padding: '1px 0', borderTop: `1px solid ${bd}22` }}>
+                            <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                              <span style={{ color: dm, fontSize: '8px', marginRight: '3px' }}>{m.date}</span>
+                              {m.type === 'gs' ? <>{fl(m.h)} {nm(m.h)} <span style={{ color: dm }}>×</span> {fl(m.a)} {nm(m.a)}</> : <><span style={{ color: bl }}>M{m.mn}</span> {m.topPair ? <span style={{ color: dm }}>{nm(m.topPair[0])}×{nm(m.topPair[1])}?</span> : <span style={{ color: dm }}>{m.phase}</span>}</>}
+                            </span>
+                            <span style={{ textAlign: 'right', fontWeight: 700, color: m.res ? gn : dm, fontFamily: 'monospace' }}>{m.res || '—'}</span>
+                            <span style={{ textAlign: 'right', color: dm, fontSize: '8px' }}>{m.elo ? Math.round(m.elo) : ''}</span>
+                          </div>
+                        ))}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              );
+            })()}
 
             {muView === 'venue' && matchTmData && (() => {
               const MATCHES = [
