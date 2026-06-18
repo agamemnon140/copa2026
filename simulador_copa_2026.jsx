@@ -93,6 +93,10 @@ const GS_BRT = ['16:00','23:00','16:00','22:00','01:00','16:00','19:00','22:00',
 const KO_BRT = {73:'16:00',74:'17:30',75:'22:00',76:'14:00',77:'18:00',78:'14:00',79:'22:00',80:'13:00',81:'21:00',82:'17:00',83:'20:00',84:'16:00',85:'00:00',86:'19:00',87:'22:30',88:'15:00',89:'18:00',90:'14:00',91:'17:00',92:'21:00',93:'16:00',94:'21:00',95:'13:00',96:'17:00',97:'17:00',98:'16:00',99:'18:00',100:'22:00',101:'16:00',102:'16:00',103:'18:00',104:'16:00'};
 const KO_DATE = {73:'28/Jun',74:'29/Jun',75:'29/Jun',76:'29/Jun',77:'30/Jun',78:'30/Jun',79:'30/Jun',80:'1/Jul',81:'1/Jul',82:'1/Jul',83:'2/Jul',84:'2/Jul',85:'3/Jul',86:'3/Jul',87:'3/Jul',88:'3/Jul',89:'4/Jul',90:'4/Jul',91:'5/Jul',92:'5/Jul',93:'6/Jul',94:'6/Jul',95:'7/Jul',96:'7/Jul',97:'9/Jul',98:'10/Jul',99:'11/Jul',100:'11/Jul',101:'14/Jul',102:'15/Jul',103:'18/Jul',104:'19/Jul'};
 const KO_CITY = {73:'Los Angeles',74:'Boston',75:'Monterrey',76:'Houston',77:'Nova York/NJ',78:'Dallas',79:'Cd. México',80:'Atlanta',81:'S. Francisco',82:'Seattle',83:'Toronto',84:'Los Angeles',85:'Vancouver',86:'Miami',87:'Kansas City',88:'Dallas',89:'Filadélfia',90:'Houston',91:'Nova York/NJ',92:'Cd. México',93:'Dallas',94:'Seattle',95:'Atlanta',96:'Vancouver',97:'Boston',98:'Los Angeles',99:'Miami',100:'Kansas City',101:'Dallas',102:'Atlanta',103:'Miami',104:'MetLife'};
+// Ordem visual do chaveamento (pathways do Bracket): índices nos arrays r32/r16 do runSim.
+// Usada para o "1 Copa" listar os confrontos na MESMA sequência da aba Probs/Bracket.
+const BRACKET_R32_ORDER = [1, 4, 0, 2, 10, 11, 8, 9, 3, 5, 6, 7, 13, 15, 12, 14];
+const BRACKET_R16_ORDER = [0, 1, 4, 5, 2, 3, 6, 7];
 // Mata-mata spec: como cada partida resolve seus 2 times. type: 'pos' (1°/2° de grupo), '3rd' (Anexo C), 'win' (vencedor jogo X), 'lose' (perdedor jogo X = só M103)
 const KO_SPEC = {
   73:{h:{t:'pos',g:'A',p:2},a:{t:'pos',g:'B',p:2},l:'2A×2B',ph:'R32'},
@@ -1065,6 +1069,7 @@ export default function WC2026() {
   const [clsMetric, setClsMetric] = useState('class'); // métrica observada na tabela de impacto: class|p1..p4|pts|gf|gd
   const [preOpen, setPreOpen] = useState(null); // idx do jogo GS (ainda sem placar) com o "E se?" pré-jogo aberto
   const [bracketSel, setBracketSel] = useState(null); // {type:'match',mn} | {type:'group',gn} | null — painel de detalhe do bracket
+  const [selCombo, setSelCombo] = useState(null); // combinação de 3ºs fixada manualmente (null = automática, a mais provável)
   const [surSort, setSurSort] = useState('bits'); // ordenação da aba Surpresas: 'bits' | 'impact'
   const [surModels, setSurModels] = useState(false); // mostra a comparação de modelos (backtest) dentro da aba Surpresas
   const [surExpand, setSurExpand] = useState(null); // resKey expandida (movers) na aba Surpresas
@@ -1169,10 +1174,12 @@ export default function WC2026() {
       const NB = Math.min(Math.max(100, Math.floor(+nSim) || 10000), 30000);
       const r = runMC(groups, NB, {}, []);
       _dynAdj = svDyn; // restaura p/ render (rt) e demais cálculos seguirem com o ajuste vigente
-      setBaseAgg({ p: r.p, g3p: r.g3p, muPct: r.muPct, comboList: r.comboList, tmPct: r.tmPct, posMu: r.posMu, matchTm: r.matchTm, n: NB });
+      setBaseAgg({ p: r.p, g3p: r.g3p, muPct: r.muPct, comboList: r.comboList, tmPct: r.tmPct, posMu: r.posMu, matchTm: r.matchTm, posTm: r.posTm, posVsTm: r.posVsTm, cutoff3rd: r.cutoff3rd, tpc: r.tpc, matchWho: r.matchWho, n: NB });
     } catch (err) { /* baseline é só indicador; falha não quebra o app */ }
   };
-  const maybeBaseline = () => { const mk = modelKey(); if (baseKeyRef.current !== mk) { baseKeyRef.current = mk; setTimeout(computeBaseline, 0); } };
+  const maybeBaseline = () => { const mk = modelKey(); if (baseKeyRef.current !== mk) { baseKeyRef.current = mk; computeBaseline(); } };
+  // Agenda trabalho pesado para DEPOIS da primeira pintura (não trava a tela após o run).
+  const afterPaint = (fn) => { requestAnimationFrame(() => { if (typeof window.requestIdleCallback === 'function') window.requestIdleCallback(fn, { timeout: 800 }); else setTimeout(fn, 300); }); };
   const doMC = () => {
     const runKey = urKey(userRes); // resultados que ESTE MC vai incorporar
     if (running) return; // já rodando (efeitos automáticos não cancelam nem empilham)
@@ -1203,8 +1210,9 @@ export default function WC2026() {
             setAppliedKey(runKey); // resultados agora incorporados — limpa o "não aplicado"
             setMcMeta({ nAccepted: r.nAccepted, n: r.n, conds: conditions });
             setRunning(false); setMcProg(null); setTab('probs');
-            maybeBaseline(); // recalcula a baseline pré-Copa se o modelo mudou
-            setTimeout(precomputeEvoAll, 60); // pré-preenche a Evolução dos 12 grupos em segundo plano
+            // Trabalho pesado (baseline pré-Copa + Evolução dos 12 grupos) só DEPOIS da tela pintar,
+            // e encadeado para não competirem — evita a lentidão pós-run sem mudar nada do conteúdo.
+            afterPaint(() => { maybeBaseline(); afterPaint(precomputeEvoAll); });
           } catch (err) { setRunning(false); setMcProg(null); setMcErr('Falha ao agregar a simulação: ' + (err?.message || err)); }
         }, 0);
       } catch (err) {
@@ -1240,6 +1248,48 @@ export default function WC2026() {
   const basePairPct = (list, a, b) => { if (!list) return null; const m = list.find(x => (x.a === a && x.b === b) || (x.a === b && x.b === a)); return m ? m.pct : 0; };
   // Busca o % da baseline para uma combinação de 3ºs (lista [{key,pct}]).
   const baseComboPct = (key) => { if (!baseAgg?.comboList) return null; const m = baseAgg.comboList.find(c => c.key === key); return m ? m.pct : 0; };
+
+  // ── Resumo por confederação (aba Cruzamentos ▸ Confederações) ───────────────
+  // Sobre TODOS os jogos já disputados (GS + mata-mata). Usa o Elo INICIAL (rtRaw, sem
+  // ajuste dinâmico) para a expectativa; Elo ± é o ajuste acumulado (mesma conta do Elo
+  // dinâmico, K fixo); Δ pts = pontos reais − esperados (modelo de gols com tilt/spread/fav).
+  const CONFED_LIST = ['UEFA', 'CONMEBOL', 'CONCACAF', 'CAF', 'AFC', 'OFC'];
+  const confedStats = useMemo(() => {
+    const sv = { dyn: _dynAdj, inj: _injM };
+    try {
+      _rSys = rSys; _customElo = customElo; _ME = customME; _useTilt = useTilt; _fav = favWeight; _spread = spread; _hb = homeAdv; _injM = {}; _dynAdj = {};
+      const st = {}; CONFED_LIST.forEach(c => st[c] = { conf: c, n: 0, w: 0, d: 0, l: 0, gf: 0, ga: 0, elo: 0, dPts: 0, eloOrig: 0, nTeams: 0 });
+      all.forEach(t => { const c = CF[t]; if (st[c]) { st[c].eloOrig += rtRaw(t); st[c].nTeams++; } });
+      const acc = (team, opp, eFor, eAg, gF, gA) => {
+        const c = CF[team]; if (!st[c]) return; const s = st[c];
+        s.n++; s.gf += gF; s.ga += gA;
+        const r = gF > gA ? 1 : gF < gA ? 0 : 0.5;
+        if (r === 1) s.w++; else if (r === 0.5) s.d++; else s.l++;
+        const exp = 1 / (1 + Math.pow(10, (eAg - eFor) / 400));
+        s.elo += DYN_K * (r - exp);
+        const pr = mProbs(eFor, eAg, team, opp);
+        s.dPts += (r === 1 ? 3 : r === 0.5 ? 1 : 0) - (3 * pr.pH / 100 + 1 * pr.pD / 100);
+      };
+      GS.forEach(([gn, hi, ai, date, city], idx) => {
+        const rr = userRes[idx]; if (!rr || rr.gA == null || rr.gB == null) return;
+        const h = groups[gn][hi], a = groups[gn][ai];
+        const eH = efCity(h, city), eA = efCity(a, city);
+        acc(h, a, eH, eA, rr.gA, rr.gB); acc(a, h, eA, eH, rr.gB, rr.gA);
+      });
+      try {
+        const ko = resolveKO(resolveStandings(groups, userRes), userRes);
+        for (let mn = 73; mn <= 104; mn++) {
+          const rr = userRes['k' + mn]; if (!rr || rr.gA == null || rr.gB == null) continue;
+          const m = ko[mn]; if (!m || !m.h || !m.a) continue;
+          const eH = mn <= 88 ? ef(m.h) : efCity(m.h, KO_CITY[mn]);
+          const eA = mn <= 88 ? ef(m.a) : efCity(m.a, KO_CITY[mn]);
+          acc(m.h, m.a, eH, eA, rr.gA, rr.gB); acc(m.a, m.h, eA, eH, rr.gB, rr.gA);
+        }
+      } catch (e) { /* bracket ainda não resolvível: ignora o mata-mata */ }
+      CONFED_LIST.forEach(c => { st[c].eloOrig = st[c].nTeams ? Math.round(st[c].eloOrig / st[c].nTeams) : 0; });
+      return CONFED_LIST.map(c => st[c]).filter(s => s.nTeams > 0);
+    } finally { _dynAdj = sv.dyn; _injM = sv.inj; }
+  }, [userRes, rSys, customElo, customME, useTilt, favWeight, spread, homeAdv, groups, pc, all]);
 
   // ── Impacto instantâneo: Δ chance de classificação (GS) / de avanço (KO) ────
   // GS: pares de mini-MCs SÓ do grupo (6 jogos) com sementes idênticas (CRN) —
@@ -2016,6 +2066,8 @@ export default function WC2026() {
               const top8str = g3ranked.slice(0,8).map(([g])=>g).sort().join('');
               const exactMatch = acEntries.find(e => e.groups === top8str);
               if (exactMatch) bestCombo = top8str;
+              if (selCombo && AC[selCombo]) bestCombo = selCombo; // cenário fixado manualmente pelo usuário
+              const comboFixed = !!(selCombo && AC[selCombo]);
               const acMatch = acEntries.find(e => e.groups === bestCombo) || acEntries[0];
               const W8 = ['A','B','D','E','G','I','K','L'];
               const thirdAssign = {}; // slot label -> group letter of 3rd
@@ -2231,7 +2283,7 @@ export default function WC2026() {
 
                   {/* 3rd-place summary — clicável: painel global dos 3ºs */}
                   {g3p && <div onClick={() => setBracketSel(s => s?.type === 'thirds' ? null : { type: 'thirds' })} title="Clique para ver o panorama completo dos 3ºs" style={{ marginBottom:'12px', padding:'6px 10px', background:card, borderRadius:'6px', border:`1px solid ${bracketSel?.type === 'thirds' ? acc : bd}`, maxWidth:'600px', cursor:'pointer' }}>
-                    <div style={{ fontSize:'9px', fontWeight:700, color:bl, marginBottom:'3px' }}>8 melhores 3°s (por prob. individual; Anexo C: {bestCombo})</div>
+                    <div style={{ fontSize:'9px', fontWeight:700, color:bl, marginBottom:'3px' }}>8 melhores 3°s (por prob. individual; Anexo C: {bestCombo}){comboFixed && <span onClick={(e) => { e.stopPropagation(); setSelCombo(null); }} title="Combinação fixada manualmente — clique para voltar ao automático" style={{ marginLeft:'6px', color:acc, cursor:'pointer', textDecoration:'underline' }}>● cenário fixado ✕</span>}</div>
                     <div style={{ display:'flex', gap:'4px', flexWrap:'wrap' }}>
                       {Object.entries(g3p).sort((a,b)=>b[1]-a[1]).map(([gn, pct]) => {
                         const isIn = top8set.has(gn);
@@ -2274,15 +2326,18 @@ export default function WC2026() {
                             </div>
                             <div>
                               {comboList?.length > 0 && <>
-                                <div style={{ fontSize: '9px', fontWeight: 700, color: bl, marginBottom: '2px' }}>Combinações de 8 grupos mais prováveis</div>
-                                {comboList.slice(0, 8).map((c, i) => (
-                                  <div key={c.key} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '10px', padding: '1px 0', fontFamily: 'monospace' }}>
-                                    <span style={{ color: i === 0 ? acc : tx, fontWeight: i === 0 ? 700 : 400 }}>{c.key}{c.key === bestCombo ? ' ◂' : ''}</span>
-                                    <span style={{ fontWeight: 700, color: i === 0 ? acc : dm }}>{c.pct.toFixed(1)}%</span>
+                                <div style={{ fontSize: '9px', fontWeight: 700, color: bl, marginBottom: '2px' }}>Combinações de 8 grupos mais prováveis <span style={{ color: dm, fontWeight: 400 }}>(clique p/ fixar o cenário)</span></div>
+                                {comboList.slice(0, 8).map((c, i) => {
+                                  const isSel = c.key === bestCombo;
+                                  return (
+                                  <div key={c.key} onClick={() => setSelCombo(s => s === c.key ? null : c.key)} title="Clique para repare­ar o bracket com esta combinação de 3ºs" style={{ display: 'flex', justifyContent: 'space-between', fontSize: '10px', padding: '1px 4px', fontFamily: 'monospace', cursor: 'pointer', borderRadius: '3px', background: isSel ? `${acc}22` : 'transparent', border: `1px solid ${isSel ? acc : 'transparent'}` }}>
+                                    <span style={{ color: isSel ? acc : tx, fontWeight: isSel ? 700 : 400 }}>{c.key}{isSel ? ' ◂' : ''}</span>
+                                    <span style={{ fontWeight: 700, color: isSel ? acc : dm }}>{c.pct.toFixed(1)}%</span>
                                   </div>
-                                ))}
+                                  );
+                                })}
                               </>}
-                              <div style={{ fontSize: '9px', fontWeight: 700, color: bl, margin: '6px 0 2px' }}>Destino dos 3ºs na combinação {bestCombo} (Anexo C)</div>
+                              <div style={{ fontSize: '9px', fontWeight: 700, color: bl, margin: '6px 0 2px' }}>Destino dos 3ºs na combinação {bestCombo} {comboFixed ? <span style={{ color: acc, fontWeight: 400 }}>(fixada — <span onClick={() => setSelCombo(null)} style={{ cursor: 'pointer', textDecoration: 'underline' }}>voltar ao automático</span>)</span> : <span style={{ color: dm, fontWeight: 400 }}>(mais provável)</span>} (Anexo C)</div>
                               {thirdSlots.map(([mn, spec]) => {
                                 const slot = spec.a.s; // letra do slot W3
                                 const srcG = thirdAssign[slot]; // grupo cujo 3º cai aqui
@@ -2325,9 +2380,9 @@ export default function WC2026() {
                                   <div key={t} style={{ display: 'grid', gridTemplateColumns: '1fr 80px 46px 46px 46px', gap: '4px', alignItems: 'center', fontSize: '10px', padding: '1px 0' }}>
                                     <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{fl(t)} {nm(t)}</span>
                                     <div style={{ height: '8px', background: `${acc}18`, borderRadius: '2px' }}><div style={{ height: '100%', width: `${Math.min(pPlay, 100)}%`, background: acc, borderRadius: '2px' }} /></div>
-                                    <span style={{ textAlign: 'right', fontWeight: 700, color: acc }}>{pPlay.toFixed(1)}%</span>
+                                    <span style={{ textAlign: 'right', fontWeight: 700, color: acc }}>{pPlay.toFixed(1)}%{dTag(pPlay, baseAgg?.matchWho?.[mn] ? (baseAgg.matchWho[mn][t] || 0) / baseN * 100 : null)}</span>
                                     <span style={{ textAlign: 'right', color: gn }}>{pWin.toFixed(0)}%</span>
-                                    <span style={{ textAlign: 'right', color: dm }}>{(res[t]?.[nextK] || 0).toFixed(1)}%</span>
+                                    <span style={{ textAlign: 'right', color: dm }}>{(res[t]?.[nextK] || 0).toFixed(1)}%{dTag(res[t]?.[nextK] || 0, baseAgg?.p?.[t]?.[nextK])}</span>
                                   </div>
                                 );
                               })}
@@ -2339,7 +2394,7 @@ export default function WC2026() {
                               {pairs.map(([k, c]) => { const [a2, b2] = k.split('|'); return (
                                 <div key={k} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '10px', padding: '1px 0' }}>
                                   <span>{fl(a2)} {nm(a2)} <span style={{ color: dm }}>vs</span> {fl(b2)} {nm(b2)}</span>
-                                  <span style={{ fontWeight: 700, color: bl }}>{(c / mcN * 100).toFixed(1)}%</span>
+                                  <span style={{ fontWeight: 700, color: bl }}>{(c / mcN * 100).toFixed(1)}%{dTag(c / mcN * 100, baseAgg?.matchTm?.[mn] ? (baseAgg.matchTm[mn][k] || 0) / baseN * 100 : null)}</span>
                                 </div>
                               ); })}
                               {poss.length > 0 && <>
@@ -2364,6 +2419,7 @@ export default function WC2026() {
                         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(150px,1fr))', gap: '8px' }}>
                           {[1, 2, 3, 4].map(p => {
                             const entries = Object.entries(posWho?.[gName + p] || {}).sort((a, b) => b[1] - a[1]);
+                            const basePos = t => { const b = baseAgg?.p?.[t]; if (!b) return null; return p === 1 ? (b.g1 || 0) : p === 2 ? (b.g2 || 0) : p === 3 ? ((b.g3a || 0) + (b.g3o || 0)) : (b.g4 || 0); };
                             return (
                               <div key={p}>
                                 <div style={{ fontSize: '9px', fontWeight: 700, color: p <= 2 ? gn : p === 3 ? bl : rd, borderBottom: `1px solid ${bd}`, paddingBottom: '2px', marginBottom: '2px' }}>{gName}{p} {p <= 2 ? '(avança)' : p === 3 ? '(repescagem 3°s)' : '(eliminado)'}</div>
@@ -2372,7 +2428,7 @@ export default function WC2026() {
                                   return (
                                     <div key={t} style={{ display: 'grid', gridTemplateColumns: '1fr 40px', gap: '4px', alignItems: 'center', fontSize: '10px', padding: '1px 0' }}>
                                       <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: pct > 50 ? tx : dm }}>{fl(t)} {nm(t)}</span>
-                                      <span style={{ textAlign: 'right', fontWeight: 600, color: pct > 50 ? gn : pct > 20 ? acc : dm }}>{pct.toFixed(1)}%</span>
+                                      <span style={{ textAlign: 'right', fontWeight: 600, color: pct > 50 ? gn : pct > 20 ? acc : dm }}>{pct.toFixed(1)}%{dTag(pct, basePos(t))}</span>
                                     </div>
                                   );
                                 })}
@@ -2468,10 +2524,46 @@ export default function WC2026() {
               <SB active={muView === 'path'} onClick={() => setMuView('path')}>Path</SB>
               <SB active={muView === 'surpresas'} onClick={() => setMuView('surpresas')}>Surpresas</SB>
               <SB active={muView === 'evolucao'} onClick={() => setMuView('evolucao')}>Evolução</SB>
+              <SB active={muView === 'confed'} onClick={() => setMuView('confed')}>Confederações</SB>
             </div>
             {baseAgg && ['round', 'team', 'pos', 'combos', 'venue'].includes(muView) && (
               <div style={{ fontSize: '9px', color: dm, marginBottom: '8px' }}>Os marcadores <span style={{ color: gn, fontWeight: 700 }}>▲</span>/<span style={{ color: rd, fontWeight: 700 }}>▼</span> mostram a variação em p.p. <strong style={{ color: tx }}>desde o início da Copa</strong> (vs simulação pré-Copa, sem resultados{dynElo ? ', já incluindo o efeito do Elo dinâmico' : ''}). Aparecem no modo absoluto.</div>
             )}
+
+            {muView === 'confed' && (() => {
+              const rows = confedStats.slice().sort((a, b) => b.dPts - a.dPts);
+              const totals = rows.reduce((s, r) => ({ n: s.n + r.n, w: s.w + r.w, d: s.d + r.d, l: s.l + r.l }), { n: 0, w: 0, d: 0, l: 0 });
+              return (
+                <div>
+                  <div style={{ fontSize: '12px', fontWeight: 700, color: bl, marginBottom: '4px' }}>🌍 Desempenho por confederação</div>
+                  <div style={{ fontSize: '10px', color: dm, marginBottom: '10px', lineHeight: 1.5, maxWidth: '760px' }}>Resumo dos <strong style={{ color: tx }}>{totals.n / 2 | 0}</strong> jogos já disputados (fase de grupos + mata-mata). <strong>Elo ±</strong> = Elo ganho/perdido vs a expectativa inicial (mesma conta do Elo dinâmico, K={DYN_K}); <strong>Δ pts</strong> = pontos reais − esperados pelo modelo. Elo médio orig. = força média (rating inicial) das seleções da confederação no torneio.</div>
+                  {totals.n === 0 ? <div style={{ padding: '20px', textAlign: 'center', color: dm, fontSize: '11px' }}>Preencha resultados para ver o desempenho por confederação.</div> : (
+                    <div style={{ overflowX: 'auto' }}>
+                      <table style={{ borderCollapse: 'collapse', fontSize: '11px', minWidth: '560px' }}>
+                        <thead><tr>{['Confederação', 'Times', 'Jogos', 'V', 'E', 'D', 'Gols', 'Elo méd. orig.', 'Elo ±', 'Δ pts vs esper.'].map((h, i) => (
+                          <th key={h} style={{ padding: '5px 8px', textAlign: i === 0 ? 'left' : 'right', color: dm, fontSize: '9px', fontWeight: 600, borderBottom: `1px solid ${bd}` }}>{h}</th>
+                        ))}</tr></thead>
+                        <tbody>{rows.map(r => (
+                          <tr key={r.conf}>
+                            <td style={{ padding: '4px 8px', fontWeight: 700, color: tx }}>{r.conf}</td>
+                            <td style={{ padding: '4px 8px', textAlign: 'right', color: dm }}>{r.nTeams}</td>
+                            <td style={{ padding: '4px 8px', textAlign: 'right', color: r.n ? tx : dm }}>{r.n}</td>
+                            <td style={{ padding: '4px 8px', textAlign: 'right', color: gn, fontWeight: 600 }}>{r.w}</td>
+                            <td style={{ padding: '4px 8px', textAlign: 'right', color: dm }}>{r.d}</td>
+                            <td style={{ padding: '4px 8px', textAlign: 'right', color: rd, fontWeight: 600 }}>{r.l}</td>
+                            <td style={{ padding: '4px 8px', textAlign: 'right', color: dm }}>{r.gf}:{r.ga}</td>
+                            <td style={{ padding: '4px 8px', textAlign: 'right', color: bl, fontWeight: 600 }}>{r.eloOrig}</td>
+                            <td style={{ padding: '4px 8px', textAlign: 'right', fontWeight: 700, color: r.n === 0 ? dm : Math.abs(r.elo) < 0.5 ? dm : r.elo > 0 ? gn : rd }}>{r.n === 0 ? '—' : (r.elo > 0 ? '+' : '') + Math.round(r.elo)}</td>
+                            <td style={{ padding: '4px 8px', textAlign: 'right', fontWeight: 700, color: r.n === 0 ? dm : Math.abs(r.dPts) < 0.3 ? dm : r.dPts > 0 ? gn : rd }}>{r.n === 0 ? '—' : (r.dPts > 0 ? '+' : '') + r.dPts.toFixed(1)}</td>
+                          </tr>
+                        ))}</tbody>
+                      </table>
+                    </div>
+                  )}
+                  <div style={{ fontSize: '9px', color: dm, marginTop: '8px', maxWidth: '760px', lineHeight: 1.4 }}>Δ pts e Elo ± positivos = a confederação <strong style={{ color: gn }}>superou</strong> a expectativa inicial nos jogos disputados; negativos = ficou <strong style={{ color: rd }}>abaixo</strong>. Mata-mata contabilizado pelo placar de 90′ (pênaltis não contam como V/D aqui).</div>
+                </div>
+              );
+            })()}
 
             {muView === 'evolucao' && (() => {
               const teamsG = groups[evoGrp];
@@ -2962,15 +3054,17 @@ export default function WC2026() {
                       const labels = { r32: 'R32', r16: 'R16', qf: 'Quartas', sf: 'Semifinais', fin: 'Final' };
                       let items = [];
                       let total = 0;
+                      const baseD = posMode === 'pos' ? baseAgg?.posTm?.[rd]?.[selPos] : baseAgg?.posVsTm?.[rd]?.[selPos];
+                      const baseAt = k => baseD ? (baseD[k] || 0) / baseN * 100 : null;
                       if (posMode === 'pos') {
                         const d = posTm?.[rd]?.[selPos] || {};
                         items = Object.entries(d).map(([opp, c]) => {
                           const oppBest = posWho?.[opp] ? Object.entries(posWho[opp]).sort((a,b)=>b[1]-a[1])[0]?.[0] : null;
-                          return { label: opp, hint: oppBest ? `${fl(oppBest)}${nm(oppBest)}` : '', pct: (c / mcN) * 100 };
+                          return { label: opp, key: opp, hint: oppBest ? `${fl(oppBest)}${nm(oppBest)}` : '', pct: (c / mcN) * 100 };
                         }).sort((a, b) => b.pct - a.pct);
                       } else {
                         const d = posVsTmData?.[rd]?.[selPos] || {};
-                        items = Object.entries(d).map(([t, c]) => ({ label: `${fl(t)} ${nm(t)}`, hint: '', pct: (c / mcN) * 100 })).sort((a, b) => b.pct - a.pct);
+                        items = Object.entries(d).map(([t, c]) => ({ label: `${fl(t)} ${nm(t)}`, key: t, hint: '', pct: (c / mcN) * 100 })).sort((a, b) => b.pct - a.pct);
                       }
                       total = items.reduce((s, x) => s + x.pct, 0);
                       // Compute avg opponent Elo
@@ -2995,7 +3089,7 @@ export default function WC2026() {
                                   {posMode === 'pos' && x.hint && <span style={{ color: dm, fontSize: '9px' }}>{x.hint}</span>}
                                   {posMode === 'team' && <span>{x.label}</span>}
                                 </span>
-                                <span style={{ color: acc, fontWeight: 600 }}>{display.toFixed(1)}%</span>
+                                <span style={{ color: acc, fontWeight: 600 }}>{display.toFixed(1)}%{!condMode && dTag(x.pct, baseAt(x.key))}</span>
                               </div>
                             );
                           })}
@@ -3550,6 +3644,17 @@ export default function WC2026() {
               // Find median: last row (scanning top→bottom) where cumPct >= 50 = first row scanning bottom→top where cumPct >= 50
               const median = [...rows].reverse().find(r => r.cumPct >= 50) || rows[rows.length - 1];
               const medLabel = median ? `${median.pts}pts ${median.gd >= 0 ? '+' : ''}${median.gd}` : '?';
+              // Baseline pré-Copa (mesma lógica) para mostrar de onde o corte saiu.
+              let medLabelBase = null, dMeanPts = null;
+              if (baseAgg?.cutoff3rd?.length) {
+                const bdat = baseAgg.cutoff3rd, bn = bdat.length, bfreq = {};
+                bdat.forEach(d => { const k = d.pts + 'p' + d.gd; if (!bfreq[k]) bfreq[k] = { pts: d.pts, gd: d.gd, cnt: 0 }; bfreq[k].cnt++; });
+                const brows = Object.values(bfreq).sort((a, b) => b.pts - a.pts || b.gd - a.gd);
+                let bc = 0; for (let i = brows.length - 1; i >= 0; i--) { bc += brows[i].cnt; brows[i].cumPct = bc / bn * 100; }
+                const bmed = [...brows].reverse().find(r => r.cumPct >= 50) || brows[brows.length - 1];
+                medLabelBase = bmed ? `${bmed.pts}pts ${bmed.gd >= 0 ? '+' : ''}${bmed.gd}` : null;
+                dMeanPts = data.reduce((s, d) => s + d.pts, 0) / n - bdat.reduce((s, d) => s + d.pts, 0) / bn;
+              }
               return (<>
                 <div style={{ fontSize: '12px', fontWeight: 700, marginBottom: '4px', color: bl }}>Corte do 8° melhor terceiro colocado</div>
                 <div style={{ fontSize: '10px', color: dm, marginBottom: '10px' }}>Em cada simulação, os 12 terceiros são ranqueados por pontos, saldo e gols. O 8° (último a avançar) define o corte. Abaixo, a frequência de cada combinação.</div>
@@ -3558,6 +3663,12 @@ export default function WC2026() {
                     <div style={{ fontSize: '9px', color: dm }}>Mediana do corte (50%)</div>
                     <div style={{ fontSize: '16px', fontWeight: 700, color: gd }}>{medLabel}</div>
                   </div>
+                  {medLabelBase && (
+                    <div style={{ background: card, borderRadius: '6px', border: `1px solid ${bd}`, padding: '8px 14px', textAlign: 'center' }} title="Corte mediano na simulação pré-Copa (sem resultados) e variação da média de pontos do corte desde o início.">
+                      <div style={{ fontSize: '9px', color: dm }}>Mediana pré-Copa → agora</div>
+                      <div style={{ fontSize: '13px', fontWeight: 700, color: dm }}>{medLabelBase} <span style={{ color: tx }}>→ {medLabel}</span>{dMeanPts != null && Math.abs(dMeanPts) >= 0.05 && <span style={{ fontSize: '10px', marginLeft: '5px', color: dMeanPts > 0 ? gn : rd }}>({dMeanPts > 0 ? '+' : ''}{dMeanPts.toFixed(2)} pts méd.)</span>}</div>
+                    </div>
+                  )}
                 </div>
                 <div style={{ maxWidth: '500px' }}>
                   <div style={{ display: 'grid', gridTemplateColumns: '90px 1fr 44px 44px', gap: '4px', marginBottom: '4px', fontSize: '9px', color: dm, fontWeight: 600 }}>
@@ -3944,7 +4055,14 @@ export default function WC2026() {
                       // Elo médio do caminho = média das fases alcançadas (peso igual por fase).
                       const eloSteps = path.filter(s => s && s.avgElo > 0);
                       const pathElo = eloSteps.length ? Math.round(eloSteps.reduce((s, x) => s + x.avgElo, 0) / eloSteps.length) : 0;
-                      return { pn, finishFreq, condCh, path, pathElo };
+                      // Mesmo cálculo na baseline pré-Copa (rtRaw = Elo original) p/ o Δ.
+                      const db = baseAgg?.tpc?.[team]?.[grp + pn];
+                      let pathEloBase = 0;
+                      if (db) {
+                        const bs = RDS.map(([rk]) => { const ent = Object.entries(db[rk] || {}); if (!ent.length) return 0; const reached = ent.reduce((s, [, c]) => s + c, 0); return reached ? ent.reduce((s, [o, c]) => s + rtRaw(o) * c, 0) / reached : 0; }).filter(v => v > 0);
+                        pathEloBase = bs.length ? Math.round(bs.reduce((s, x) => s + x, 0) / bs.length) : 0;
+                      }
+                      return { pn, finishFreq, condCh, path, pathElo, pathEloBase };
                     }).filter(Boolean);
                     if (!rows.length) return null;
                     return (
@@ -3961,7 +4079,7 @@ export default function WC2026() {
                                 <span style={{ fontWeight: 700, color: acc }}>{posLabel[r.pn]}</span>
                                 <span style={{ color: dm }}> · termina {r.finishFreq.toFixed(0)}%</span>
                                 <div style={{ color: gd, fontWeight: 700, fontSize: '11px' }}>🏆 {r.condCh.toFixed(1)}%</div>
-                                {r.pathElo > 0 && <div style={{ color: bl, fontSize: '9px', fontWeight: 600 }} title="Elo médio dos adversários ao longo do caminho mais provável (média das fases alcançadas, ponderada pela frequência de cada adversário).">Elo méd. caminho: {r.pathElo}</div>}
+                                {r.pathElo > 0 && <div style={{ color: bl, fontSize: '9px', fontWeight: 600 }} title="Elo médio dos adversários ao longo do caminho mais provável (média das fases alcançadas, ponderada pela frequência de cada adversário). ▲ = caminho ficou mais difícil desde o início da Copa.">Elo méd. caminho: {r.pathElo}{r.pathEloBase > 0 && (() => { const d = r.pathElo - r.pathEloBase; if (Math.abs(d) < 1) return null; return <span title={`início da Copa: ${r.pathEloBase}`} style={{ marginLeft: '4px', fontWeight: 700, color: d > 0 ? rd : gn }}>{d > 0 ? '▲' : '▼'}{Math.abs(d)}</span>; })()}</div>}
                               </div>
                               <div style={{ fontSize: '10px', display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '2px' }}>
                                 {RDS.map(([rk, rl], j) => {
@@ -4687,13 +4805,13 @@ export default function WC2026() {
             {(phase === 'r32') && (<>
               <h3 style={{ fontSize: '13px', fontWeight: 700, color: acc, margin: '12px 0 6px' }}>🏟️ R32</h3>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(290px,1fr))', gap: '4px' }}>
-                {single.r32.map((m, i) => <KO key={i} m={m} sp />)}
+                {BRACKET_R32_ORDER.map(i => single.r32[i] && <KO key={i} m={single.r32[i]} sp />)}
               </div>
             </>)}
             {(phase === 'r16') && (<>
               <h3 style={{ fontSize: '13px', fontWeight: 700, color: acc, margin: '12px 0 6px' }}>⚔️ R16</h3>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(290px,1fr))', gap: '4px' }}>
-                {single.r16.map((m, i) => <KO key={i} m={m} sp />)}
+                {BRACKET_R16_ORDER.map(i => single.r16[i] && <KO key={i} m={single.r16[i]} sp />)}
               </div>
             </>)}
             {(phase === 'qfsf') && (<>
