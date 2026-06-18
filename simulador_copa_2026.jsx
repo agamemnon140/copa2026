@@ -149,6 +149,9 @@ const tiltOf = t => (_useTilt && TILT[t] != null) ? TILT[t] : 0;
 const matchTilt = (tA, tB) => tiltOf(tA) + tiltOf(tB); // soma dos dois times = shift no total de gols
 
 const pp = (l, k) => { let p = Math.exp(-l); for (let i = 1; i <= k; i++) p *= l / i; return p; };
+// erf (Abramowitz-Stegun 7.1.26) e CDF normal — usados no teste de hipótese de gols/jogo.
+const erf = x => { const s = x < 0 ? -1 : 1; x = Math.abs(x); const t = 1 / (1 + 0.3275911 * x); const y = 1 - (((((1.061405429 * t - 1.453152027) * t) + 1.421413741) * t - 0.284496736) * t + 0.254829592) * t * Math.exp(-x * x); return s * y; };
+const normCdf = z => 0.5 * (1 + erf(z / Math.SQRT2));
 // cL agora aceita tilt (soma dos 2 times) — desloca o total de gols esperados aditivamente
 // Total de gols esperados = la+lb ≈ 2*_ME. Adicionamos tilt diretamente no total → shift _ME por tilt/2.
 const cL = (a, b, tilt = 0) => {
@@ -1072,6 +1075,9 @@ export default function WC2026() {
   const [selCombo, setSelCombo] = useState(null); // combinação de 3ºs fixada manualmente (null = automática, a mais provável)
   const [surSort, setSurSort] = useState('bits'); // ordenação da aba Surpresas: 'bits' | 'impact'
   const [surModels, setSurModels] = useState(false); // mostra a comparação de modelos (backtest) dentro da aba Surpresas
+  const [bsShowAll, setBsShowAll] = useState(false); // mostra todos os 48 modelos do backtest (em vez do top 20)
+  const [confedNoIntra, setConfedNoIntra] = useState(false); // ignora confrontos intra-confederação (ex. UEFA×UEFA)
+  const [confedSort, setConfedSort] = useState('aprov'); // ordenação da aba Confederações
   const [surExpand, setSurExpand] = useState(null); // resKey expandida (movers) na aba Surpresas
   const [evoData, setEvoData] = useState(null); // evolution snapshots
   const [evoTeams, setEvoTeams] = useState(['Brazil','Argentina','Spain','France']);
@@ -1210,9 +1216,9 @@ export default function WC2026() {
             setAppliedKey(runKey); // resultados agora incorporados — limpa o "não aplicado"
             setMcMeta({ nAccepted: r.nAccepted, n: r.n, conds: conditions });
             setRunning(false); setMcProg(null); setTab('probs');
-            // Trabalho pesado (baseline pré-Copa + Evolução dos 12 grupos) só DEPOIS da tela pintar,
-            // e encadeado para não competirem — evita a lentidão pós-run sem mudar nada do conteúdo.
-            afterPaint(() => { maybeBaseline(); afterPaint(precomputeEvoAll); });
+            // Baseline pré-Copa (Δ) só DEPOIS da tela pintar — evita a lentidão pós-run.
+            // A Evolução NÃO roda aqui: é calculada sob demanda por botão na própria aba.
+            afterPaint(maybeBaseline);
           } catch (err) { setRunning(false); setMcProg(null); setMcErr('Falha ao agregar a simulação: ' + (err?.message || err)); }
         }, 0);
       } catch (err) {
@@ -1261,7 +1267,9 @@ export default function WC2026() {
       const st = {}; CONFED_LIST.forEach(c => st[c] = { conf: c, n: 0, w: 0, d: 0, l: 0, gf: 0, ga: 0, elo: 0, dPts: 0, eloOrig: 0, nTeams: 0 });
       all.forEach(t => { const c = CF[t]; if (st[c]) { st[c].eloOrig += rtRaw(t); st[c].nTeams++; } });
       const acc = (team, opp, eFor, eAg, gF, gA) => {
-        const c = CF[team]; if (!st[c]) return; const s = st[c];
+        const c = CF[team]; if (!st[c]) return;
+        if (confedNoIntra && CF[opp] === c) return; // ignora confronto intra-confederação
+        const s = st[c];
         s.n++; s.gf += gF; s.ga += gA;
         const r = gF > gA ? 1 : gF < gA ? 0 : 0.5;
         if (r === 1) s.w++; else if (r === 0.5) s.d++; else s.l++;
@@ -1286,10 +1294,10 @@ export default function WC2026() {
           acc(m.h, m.a, eH, eA, rr.gA, rr.gB); acc(m.a, m.h, eA, eH, rr.gB, rr.gA);
         }
       } catch (e) { /* bracket ainda não resolvível: ignora o mata-mata */ }
-      CONFED_LIST.forEach(c => { st[c].eloOrig = st[c].nTeams ? Math.round(st[c].eloOrig / st[c].nTeams) : 0; });
+      CONFED_LIST.forEach(c => { const s = st[c]; s.eloOrig = s.nTeams ? Math.round(s.eloOrig / s.nTeams) : 0; s.aprov = s.n ? (3 * s.w + s.d) / (3 * s.n) * 100 : null; });
       return CONFED_LIST.map(c => st[c]).filter(s => s.nTeams > 0);
     } finally { _dynAdj = sv.dyn; _injM = sv.inj; }
-  }, [userRes, rSys, customElo, customME, useTilt, favWeight, spread, homeAdv, groups, pc, all]);
+  }, [userRes, rSys, customElo, customME, useTilt, favWeight, spread, homeAdv, groups, pc, all, confedNoIntra]);
 
   // ── Impacto instantâneo: Δ chance de classificação (GS) / de avanço (KO) ────
   // GS: pares de mini-MCs SÓ do grupo (6 jogos) com sementes idênticas (CRN) —
@@ -1506,7 +1514,8 @@ export default function WC2026() {
         {bsData && bsData.n > 0 && (() => {
           const best = bsData.results.find(r => !r.random); const bestLL = [...bsData.results].filter(r => !r.random).sort((a, b) => a.logloss - b.logloss)[0];
           const randomEntry = bsData.results.find(r => r.random); const randomRank = bsData.results.indexOf(randomEntry) + 1;
-          const rows = bsData.results.slice(0, 20); const randomShown = rows.includes(randomEntry);
+          const nModels = bsData.results.filter(r => !r.random).length;
+          const rows = bsShowAll ? bsData.results : bsData.results.slice(0, 20); const randomShown = rows.includes(randomEntry);
           const rowOf = (r, rank) => (
             <tr key={rank} style={{ background: r.random ? `${acc}14` : rank === 1 ? `${gn}11` : 'transparent', borderTop: r.random && !randomShown ? `1px dashed ${acc}66` : undefined }}>
               <td style={{ padding: '3px 6px', textAlign: 'right', color: r.random ? acc : dm }}>{rank}</td>
@@ -1530,7 +1539,7 @@ export default function WC2026() {
                 </tbody>
               </table>
               </div>
-              <div style={{ fontSize: '10px', color: dm, marginTop: '8px' }}>🏆 Melhor por Brier: <strong style={{ color: gn }}>{RAT[best.rs]}{best.tl ? ' +tilt' : ''}{best.fv ? ' +favorit.' : ''} · mando {best.hbv}</strong> (Brier {best.brier.toFixed(4)}). <strong style={{ color: acc }}>{bsData.nBeat}</strong> de 48 modelos superam o aleatório. Mostrando as 20 melhores de 48.</div>
+              <div style={{ fontSize: '10px', color: dm, marginTop: '8px' }}>🏆 Melhor por Brier: <strong style={{ color: gn }}>{RAT[best.rs]}{best.tl ? ' +tilt' : ''}{best.fv ? ' +favorit.' : ''} · mando {best.hbv}</strong> (Brier {best.brier.toFixed(4)}). <strong style={{ color: acc }}>{bsData.nBeat}</strong> de {nModels} modelos superam o aleatório. {bsShowAll ? `Mostrando todos os ${nModels}.` : `Mostrando as 20 melhores de ${nModels}.`} <span onClick={() => setBsShowAll(v => !v)} style={{ color: acc, cursor: 'pointer', textDecoration: 'underline', fontWeight: 700 }}>{bsShowAll ? 'ver só top 20' : `ver todos (${nModels})`}</span></div>
             </div>
           );
         })()}
@@ -2526,21 +2535,27 @@ export default function WC2026() {
               <SB active={muView === 'evolucao'} onClick={() => setMuView('evolucao')}>Evolução</SB>
               <SB active={muView === 'confed'} onClick={() => setMuView('confed')}>Confederações</SB>
             </div>
-            {baseAgg && ['round', 'team', 'pos', 'combos', 'venue'].includes(muView) && (
+            {baseAgg && ['round', 'team', 'pos', 'combos', 'venue', 'duel'].includes(muView) && (
               <div style={{ fontSize: '9px', color: dm, marginBottom: '8px' }}>Os marcadores <span style={{ color: gn, fontWeight: 700 }}>▲</span>/<span style={{ color: rd, fontWeight: 700 }}>▼</span> mostram a variação em p.p. <strong style={{ color: tx }}>desde o início da Copa</strong> (vs simulação pré-Copa, sem resultados{dynElo ? ', já incluindo o efeito do Elo dinâmico' : ''}). Aparecem no modo absoluto.</div>
             )}
 
             {muView === 'confed' && (() => {
-              const rows = confedStats.slice().sort((a, b) => b.dPts - a.dPts);
+              const sortFns = { aprov: (a, b) => (b.aprov ?? -1) - (a.aprov ?? -1), dpts: (a, b) => b.dPts - a.dPts, elo: (a, b) => b.elo - a.elo, orig: (a, b) => b.eloOrig - a.eloOrig };
+              const rows = confedStats.slice().sort(sortFns[confedSort] || sortFns.aprov);
               const totals = rows.reduce((s, r) => ({ n: s.n + r.n, w: s.w + r.w, d: s.d + r.d, l: s.l + r.l }), { n: 0, w: 0, d: 0, l: 0 });
               return (
                 <div>
                   <div style={{ fontSize: '12px', fontWeight: 700, color: bl, marginBottom: '4px' }}>🌍 Desempenho por confederação</div>
-                  <div style={{ fontSize: '10px', color: dm, marginBottom: '10px', lineHeight: 1.5, maxWidth: '760px' }}>Resumo dos <strong style={{ color: tx }}>{totals.n / 2 | 0}</strong> jogos já disputados (fase de grupos + mata-mata). <strong>Elo ±</strong> = Elo ganho/perdido vs a expectativa inicial (mesma conta do Elo dinâmico, K={DYN_K}); <strong>Δ pts</strong> = pontos reais − esperados pelo modelo. Elo médio orig. = força média (rating inicial) das seleções da confederação no torneio.</div>
-                  {totals.n === 0 ? <div style={{ padding: '20px', textAlign: 'center', color: dm, fontSize: '11px' }}>Preencha resultados para ver o desempenho por confederação.</div> : (
+                  <div style={{ fontSize: '10px', color: dm, marginBottom: '8px', lineHeight: 1.5, maxWidth: '760px' }}>Resumo dos jogos já disputados {confedNoIntra ? <strong style={{ color: acc }}>(só confrontos entre confederações diferentes)</strong> : '(fase de grupos + mata-mata)'}. <strong>Aproveitamento</strong> = pontos obtidos / disputáveis. <strong>Elo ±</strong> = Elo ganho/perdido vs expectativa inicial (K={DYN_K}); <strong>Δ pts</strong> = pontos reais − esperados pelo modelo.</div>
+                  <div style={{ display: 'flex', gap: '6px', alignItems: 'center', marginBottom: '10px', flexWrap: 'wrap' }}>
+                    <button onClick={() => setConfedNoIntra(v => !v)} style={{ padding: '4px 9px', fontSize: '10px', fontWeight: 700, background: confedNoIntra ? `${acc}33` : card, color: confedNoIntra ? acc : dm, border: `1px solid ${confedNoIntra ? acc : bd}`, borderRadius: '5px', cursor: 'pointer' }} title="Desconsidera jogos entre dois times da mesma confederação (ex.: UEFA × UEFA)">{confedNoIntra ? '🚫 sem intra-confed' : 'incluir intra-confed'}</button>
+                    <span style={{ fontSize: '9px', color: dm, marginLeft: '4px' }}>Ordenar:</span>
+                    {[['aprov', 'Aproveitamento'], ['dpts', 'Δ pts'], ['elo', 'Elo ±'], ['orig', 'Elo médio']].map(([k, l]) => <SB key={k} active={confedSort === k} onClick={() => setConfedSort(k)}>{l}</SB>)}
+                  </div>
+                  {totals.n === 0 ? <div style={{ padding: '20px', textAlign: 'center', color: dm, fontSize: '11px' }}>{confedNoIntra ? 'Nenhum confronto entre confederações diferentes ainda.' : 'Preencha resultados para ver o desempenho por confederação.'}</div> : (
                     <div style={{ overflowX: 'auto' }}>
-                      <table style={{ borderCollapse: 'collapse', fontSize: '11px', minWidth: '560px' }}>
-                        <thead><tr>{['Confederação', 'Times', 'Jogos', 'V', 'E', 'D', 'Gols', 'Elo méd. orig.', 'Elo ±', 'Δ pts vs esper.'].map((h, i) => (
+                      <table style={{ borderCollapse: 'collapse', fontSize: '11px', minWidth: '620px' }}>
+                        <thead><tr>{['Confederação', 'Times', 'Jogos', 'V', 'E', 'D', 'Gols', 'Aprov.', 'Elo méd. orig.', 'Elo ±', 'Δ pts vs esper.'].map((h, i) => (
                           <th key={h} style={{ padding: '5px 8px', textAlign: i === 0 ? 'left' : 'right', color: dm, fontSize: '9px', fontWeight: 600, borderBottom: `1px solid ${bd}` }}>{h}</th>
                         ))}</tr></thead>
                         <tbody>{rows.map(r => (
@@ -2552,6 +2567,7 @@ export default function WC2026() {
                             <td style={{ padding: '4px 8px', textAlign: 'right', color: dm }}>{r.d}</td>
                             <td style={{ padding: '4px 8px', textAlign: 'right', color: rd, fontWeight: 600 }}>{r.l}</td>
                             <td style={{ padding: '4px 8px', textAlign: 'right', color: dm }}>{r.gf}:{r.ga}</td>
+                            <td style={{ padding: '4px 8px', textAlign: 'right', fontWeight: 700, color: r.aprov == null ? dm : r.aprov >= 60 ? gn : r.aprov >= 40 ? acc : rd }}>{r.aprov == null ? '—' : r.aprov.toFixed(0) + '%'}</td>
                             <td style={{ padding: '4px 8px', textAlign: 'right', color: bl, fontWeight: 600 }}>{r.eloOrig}</td>
                             <td style={{ padding: '4px 8px', textAlign: 'right', fontWeight: 700, color: r.n === 0 ? dm : Math.abs(r.elo) < 0.5 ? dm : r.elo > 0 ? gn : rd }}>{r.n === 0 ? '—' : (r.elo > 0 ? '+' : '') + Math.round(r.elo)}</td>
                             <td style={{ padding: '4px 8px', textAlign: 'right', fontWeight: 700, color: r.n === 0 ? dm : Math.abs(r.dPts) < 0.3 ? dm : r.dPts > 0 ? gn : rd }}>{r.n === 0 ? '—' : (r.dPts > 0 ? '+' : '') + r.dPts.toFixed(1)}</td>
@@ -2560,7 +2576,7 @@ export default function WC2026() {
                       </table>
                     </div>
                   )}
-                  <div style={{ fontSize: '9px', color: dm, marginTop: '8px', maxWidth: '760px', lineHeight: 1.4 }}>Δ pts e Elo ± positivos = a confederação <strong style={{ color: gn }}>superou</strong> a expectativa inicial nos jogos disputados; negativos = ficou <strong style={{ color: rd }}>abaixo</strong>. Mata-mata contabilizado pelo placar de 90′ (pênaltis não contam como V/D aqui).</div>
+                  <div style={{ fontSize: '9px', color: dm, marginTop: '8px', maxWidth: '760px', lineHeight: 1.4 }}>Δ pts e Elo ± positivos = a confederação <strong style={{ color: gn }}>superou</strong> a expectativa inicial; negativos = ficou <strong style={{ color: rd }}>abaixo</strong>. Mata-mata contabilizado pelo placar de 90′ (pênaltis não contam como V/D aqui).</div>
                 </div>
               );
             })()}
@@ -2581,10 +2597,10 @@ export default function WC2026() {
                   <div style={{ display: 'flex', gap: '3px', alignItems: 'center', marginBottom: '8px', flexWrap: 'wrap' }}>
                     <span style={{ fontSize: '10px', color: dm }}>Métrica:</span>
                     {EVO_METRICS.map(([k, l]) => <button key={k} onClick={() => setEvoTblMetric(k)} style={{ padding: '2px 7px', fontSize: '10px', fontWeight: M === k ? 700 : 400, background: M === k ? `${acc}33` : 'transparent', color: M === k ? acc : dm, border: `1px solid ${M === k ? acc : bd}`, borderRadius: '4px', cursor: 'pointer' }}>{l}</button>)}
-                    <button onClick={() => computeGroupEvo(evoGrp)} disabled={evoTblLoading} title="Recalcula este grupo (os 12 são pré-preenchidos após cada simulação)" style={{ marginLeft: '6px', padding: '4px 10px', fontSize: '10px', fontWeight: 700, color: '#000', background: acc, border: 'none', borderRadius: '4px', cursor: evoTblLoading ? 'wait' : 'pointer' }}>{evoTblLoading ? '⏳ calculando…' : '↻ recalcular'}</button>
-                    {evoAllProg && <span style={{ fontSize: '9px', color: bl }}>pré-preenchendo grupos… {evoAllProg.done}/{evoAllProg.total}</span>}
+                    <button onClick={precomputeEvoAll} disabled={!!evoAllProg || evoTblLoading} title="Calcula a evolução de todos os 12 grupos (pode levar alguns segundos)" style={{ marginLeft: '6px', padding: '4px 10px', fontSize: '10px', fontWeight: 700, color: '#000', background: gd, border: 'none', borderRadius: '4px', cursor: evoAllProg ? 'wait' : 'pointer' }}>{evoAllProg ? `⏳ ${evoAllProg.done}/${evoAllProg.total}` : '📊 calcular evolução (12 grupos)'}</button>
+                    <button onClick={() => computeGroupEvo(evoGrp)} disabled={evoTblLoading || !!evoAllProg} title="Recalcula só este grupo" style={{ padding: '4px 10px', fontSize: '10px', fontWeight: 700, color: '#000', background: acc, border: 'none', borderRadius: '4px', cursor: evoTblLoading ? 'wait' : 'pointer' }}>{evoTblLoading ? '⏳…' : `↻ só ${evoGrp}`}</button>
                   </div>
-                  {!ready ? <div style={{ padding: '24px', textAlign: 'center', color: dm, fontSize: '11px' }}>{evoTblLoading || evoAllProg ? 'Rodando snapshots…' : 'Rode a simulação (▶) para pré-preencher os 12 grupos.'}</div> : (() => {
+                  {!ready ? <div style={{ padding: '24px', textAlign: 'center', color: dm, fontSize: '11px' }}>{evoTblLoading || evoAllProg ? 'Rodando snapshots…' : 'Clique em "📊 calcular evolução (12 grupos)" para gerar a tabela (não roda automático para não pesar após cada simulação).'}</div> : (() => {
                     const snaps = tbl.snaps;
                     const mLabel = EVO_METRICS.find(([k]) => k === M)?.[1] || M;
                     return (
@@ -3583,7 +3599,7 @@ export default function WC2026() {
                                 {pct > 2 && <span style={{ fontSize: '8px', color: '#000', fontWeight: 700 }}>{pct.toFixed(1)}%</span>}
                               </div>
                             </div>
-                            <span style={{ fontSize: '10px', fontWeight: 600, color: pct > 5 ? gd : pct > 1 ? acc : dm, minWidth: '40px', textAlign: 'right' }}>{pct.toFixed(1)}%</span>
+                            <span style={{ fontSize: '10px', fontWeight: 600, color: pct > 5 ? gd : pct > 1 ? acc : dm, minWidth: '40px', textAlign: 'right' }}>{pct.toFixed(1)}%{dTag(pct, basePairPct(baseAgg?.muPct?.[rd], confA, confB))}</span>
                           </div>
                           {isExp && breakdown && breakdown.length > 0 && (
                             <div style={{ marginLeft: '12px', padding: '6px 10px 8px', background: `${card}aa`, borderLeft: `2px solid ${acc}`, marginTop: '3px', marginBottom: '6px', borderRadius: '0 4px 4px 0' }}>
@@ -3748,6 +3764,20 @@ export default function WC2026() {
               const maxCnt = rows[0]?.cnt || 1;
               const avgGoals = rows.reduce((s,r) => s + r.goals * r.cnt, 0) / srcTotal;
               const drawPct = rows.filter(r => r.margin === 0).reduce((s,r) => s + r.pct, 0);
+              // Jogos REAIS já disputados (teste de hipótese + comparação de placares observados)
+              const obs = { gs: {}, ko: {}, gsN: 0, koN: 0, gsG: 0, koG: 0 };
+              const addObs = (bucket, gA, gB) => { const sk = gA >= gB ? `${gA}-${gB}` : `${gB}-${gA}`; obs[bucket][sk] = (obs[bucket][sk] || 0) + 1; obs[bucket + 'N']++; obs[bucket + 'G'] += gA + gB; };
+              GS.forEach((row, idx) => { const r = userRes[idx]; if (r && r.gA != null && r.gB != null) addObs('gs', r.gA, r.gB); });
+              for (let mn = 73; mn <= 104; mn++) { const r = userRes['k' + mn]; if (r && r.gA != null && r.gB != null) addObs('ko', r.gA, r.gB); }
+              const obsSrc = scFilter === 'gs' ? { ...obs.gs } : scFilter === 'ko' ? { ...obs.ko } : (() => { const m = { ...obs.gs }; Object.entries(obs.ko).forEach(([k, v]) => m[k] = (m[k] || 0) + v); return m; })();
+              const obsN = scFilter === 'gs' ? obs.gsN : scFilter === 'ko' ? obs.koN : obs.gsN + obs.koN;
+              const obsG = scFilter === 'gs' ? obs.gsG : scFilter === 'ko' ? obs.koG : obs.gsG + obs.koG;
+              const obsMean = obsN ? obsG / obsN : 0;
+              // Teste de hipótese (gols/jogo real vs modelo): z sobre a média, variância do próprio modelo.
+              const varGoals = rows.reduce((s, r) => s + r.goals * r.goals * r.cnt, 0) / srcTotal - avgGoals * avgGoals;
+              const se = obsN > 0 && varGoals > 0 ? Math.sqrt(varGoals / obsN) : 0;
+              const zG = se > 0 ? (obsMean - avgGoals) / se : 0;
+              const pG = se > 0 ? 2 * (1 - normCdf(Math.abs(zG))) : null;
               return (<>
                 <div style={{ fontSize: '12px', fontWeight: 700, marginBottom: '4px', color: bl }}>Frequência de placares</div>
                 <div style={{ fontSize: '10px', color: dm, marginBottom: '8px' }}>Placares normalizados (maior×menor). {scFilter === 'gs' ? `${gsTotal.toLocaleString()} jogos de grupo.` : scFilter === 'ko' ? `${koTotal.toLocaleString()} jogos de mata-mata (incluindo prorrogação).` : `${total.toLocaleString()} jogos totais.`}</div>
@@ -3756,27 +3786,50 @@ export default function WC2026() {
                     <SB key={id} active={scFilter === id} onClick={() => setScFilter(id)}>{l}</SB>
                   ))}
                 </div>
-                <div style={{ display: 'flex', gap: '12px', marginBottom: '12px' }}>
+                <div style={{ display: 'flex', gap: '12px', marginBottom: '12px', flexWrap: 'wrap' }}>
                   <div style={{ background: card, borderRadius: '6px', border: `1px solid ${bd}`, padding: '8px 14px', textAlign: 'center' }}>
-                    <div style={{ fontSize: '9px', color: dm }}>Gols/jogo</div>
+                    <div style={{ fontSize: '9px', color: dm }}>Gols/jogo (modelo)</div>
                     <div style={{ fontSize: '16px', fontWeight: 700, color: acc }}>{avgGoals.toFixed(2)}</div>
                   </div>
+                  {obsN > 0 && (
+                    <div style={{ background: card, borderRadius: '6px', border: `1px solid ${bl}44`, padding: '8px 14px', textAlign: 'center' }}>
+                      <div style={{ fontSize: '9px', color: dm }}>Gols/jogo (real, n={obsN})</div>
+                      <div style={{ fontSize: '16px', fontWeight: 700, color: bl }}>{obsMean.toFixed(2)} <span style={{ fontSize: '10px', color: obsMean - avgGoals > 0 ? gn : rd }}>({obsMean - avgGoals > 0 ? '+' : ''}{(obsMean - avgGoals).toFixed(2)})</span></div>
+                    </div>
+                  )}
                   <div style={{ background: card, borderRadius: '6px', border: `1px solid ${bd}`, padding: '8px 14px', textAlign: 'center' }}>
-                    <div style={{ fontSize: '9px', color: dm }}>Empates</div>
+                    <div style={{ fontSize: '9px', color: dm }}>Empates (modelo)</div>
                     <div style={{ fontSize: '16px', fontWeight: 700, color: bl }}>{drawPct.toFixed(1)}%</div>
                   </div>
                 </div>
-                <div style={{ maxWidth: '480px' }}>
-                  {rows.map((r, i) => (
-                    <div key={r.score} style={{ display: 'grid', gridTemplateColumns: '44px 1fr 52px 44px', gap: '6px', alignItems: 'center', padding: '2px 0' }}>
+                {obsN > 0 && pG != null && (
+                  <div style={{ background: `${(pG < 0.05 ? rd : bl)}10`, border: `1px solid ${(pG < 0.05 ? rd : bl)}44`, borderRadius: '6px', padding: '8px 12px', marginBottom: '12px', maxWidth: '560px' }} title="H0: os gols/jogo reais vêm da mesma distribuição do modelo. z = (média real − média modelo) / erro-padrão (variância do modelo / n). p bicaudal.">
+                    <div style={{ fontSize: '11px', fontWeight: 700, color: pG < 0.05 ? rd : bl, marginBottom: '2px' }}>🧪 Teste: gols/jogo real vs simulação {obsN < 8 && <span style={{ color: acc, fontWeight: 400 }}>(amostra pequena — pouco poder)</span>}</div>
+                    <div style={{ fontSize: '10px', color: tx, lineHeight: 1.5 }}>Real <strong>{obsMean.toFixed(2)}</strong> vs modelo <strong>{avgGoals.toFixed(2)}</strong> ({obsN} jogos) · z = <strong>{zG.toFixed(2)}</strong> · p = <strong>{pG < 0.001 ? '<0,001' : pG.toFixed(3)}</strong> → {pG < 0.05 ? <span style={{ color: rd, fontWeight: 700 }}>diferença significativa (5%): a Copa está {obsMean > avgGoals ? 'mais' : 'menos'} goleadora que o modelo previu</span> : <span style={{ color: gn, fontWeight: 700 }}>consistente com o modelo (sem diferença significativa)</span>}</div>
+                  </div>
+                )}
+                <div style={{ maxWidth: '520px' }}>
+                  {obsN > 0 && (
+                    <div style={{ display: 'grid', gridTemplateColumns: '44px 1fr 52px 50px 70px', gap: '6px', fontSize: '8px', color: dm, fontWeight: 600, padding: '0 0 3px', borderBottom: `1px solid ${bd}`, marginBottom: '2px' }}>
+                      <span style={{ textAlign: 'center' }}>Placar</span><span /><span style={{ textAlign: 'right' }}>sims</span><span style={{ textAlign: 'right' }}>sim%</span><span style={{ textAlign: 'right' }}>real% (n)</span>
+                    </div>
+                  )}
+                  {rows.map((r, i) => {
+                    const obsC = obsSrc[r.score] || 0;
+                    const obsP = obsN ? obsC / obsN * 100 : null;
+                    return (
+                    <div key={r.score} style={{ display: 'grid', gridTemplateColumns: obsN > 0 ? '44px 1fr 52px 50px 70px' : '44px 1fr 52px 44px', gap: '6px', alignItems: 'center', padding: '2px 0' }}>
                       <span style={{ fontSize: '13px', fontWeight: 700, color: r.margin === 0 ? bl : tx, textAlign: 'center', fontFamily: 'monospace' }}>{r.score}</span>
-                      <div style={{ background: `${bd}44`, borderRadius: '3px', height: '16px', overflow: 'hidden' }}>
+                      <div style={{ background: `${bd}44`, borderRadius: '3px', height: '16px', overflow: 'hidden', position: 'relative' }}>
                         <div style={{ background: r.margin === 0 ? bl : r.margin >= 3 ? '#ef4444' : r.margin >= 2 ? '#f97316' : '#22c55e', height: '100%', width: `${r.cnt / maxCnt * 100}%`, borderRadius: '3px', opacity: 0.8 }}/>
+                        {obsN > 0 && obsP > 0 && <div title={`real: ${obsP.toFixed(0)}%`} style={{ position: 'absolute', top: 0, height: '100%', width: '2px', background: tx, left: `${Math.min(100, obsP / (rows[0].pct || 1) * (rows[0].cnt / maxCnt * 100))}%` }} />}
                       </div>
                       <span style={{ fontSize: '9px', color: dm, textAlign: 'right' }}>{r.cnt.toLocaleString()}</span>
                       <span style={{ fontSize: '10px', color: r.pct > 10 ? tx : dm, textAlign: 'right', fontWeight: r.pct > 10 ? 600 : 400 }}>{r.pct.toFixed(1)}%</span>
+                      {obsN > 0 && <span style={{ fontSize: '10px', textAlign: 'right', fontWeight: 700, color: obsC === 0 ? dm : Math.abs(obsP - r.pct) > 5 ? (obsP > r.pct ? gn : rd) : tx }}>{obsC === 0 ? '—' : `${obsP.toFixed(0)}% (${obsC})`}</span>}
                     </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </>);
             })()}
