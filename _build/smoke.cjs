@@ -7,7 +7,10 @@ const { chromium } = require('playwright-core');
   page.on('console', m => { if (m.type() === 'error' && !m.text().includes('404')) errs.push(m.text()); });
   page.on('pageerror', e => errs.push('PAGEERROR: ' + e.message));
   await page.goto('http://localhost:8123/', { waitUntil: 'domcontentloaded' });
+  await page.waitForSelector('text=🎲 Simular 1 Copa', { timeout: 120000 });
+  await page.locator('button', { hasText: /^▶/ }).first().click(); // não há mais auto-run: dispara o MC
   await page.waitForSelector('text=Por Grupo', { timeout: 120000 });
+  await page.waitForTimeout(800);
   await page.click('text=🔀 Cruzam.');
   await page.click('text=Path');
   await page.waitForTimeout(500);

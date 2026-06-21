@@ -709,6 +709,7 @@ const aggregate = (pool, all, groups, conditions = []) => {
   const matchWho = {}; // matchWho[mn] = {team: count}
   const matchWin = {}; // matchWin[mn] = {team: count de sims em que t VENCE essa partida}
   const matchPos = {}; // matchPos[mn] = {posKey: count} e.g. "A1×E3"
+  const matchSide = {}; // matchSide[mn] = { hWho:{team:c}, aWho:{}, hPos:{pos:c}, aPos:{} } -- por lado (mandante/visitante)
   const duelPos = {}; // duelPos[teamPairKey][rd] = {posPairKey: count} -- positions in which two teams meet at each round
   const tpc = {}; // tpc[team][posKey] = {n, ch, r32:{opp:cnt}, r16:{}, qf:{}, sf:{}, fin:{}}
   all.forEach(t => { tpc[t] = {}; });
@@ -801,6 +802,13 @@ const aggregate = (pool, all, groups, conditions = []) => {
             const ppk = m.ph + '×' + m.pa;
             matchPos[m.mn][ppk] = (matchPos[m.mn][ppk] || 0) + 1;
           }
+          // Por lado (mandante = home / visitante = away): times e posições de cada lado
+          if (!matchSide[m.mn]) matchSide[m.mn] = { hWho: {}, aWho: {}, hPos: {}, aPos: {} };
+          const sd = matchSide[m.mn];
+          sd.hWho[m.home] = (sd.hWho[m.home] || 0) + 1;
+          sd.aWho[m.away] = (sd.aWho[m.away] || 0) + 1;
+          if (m.ph) sd.hPos[m.ph] = (sd.hPos[m.ph] || 0) + 1;
+          if (m.pa) sd.aPos[m.pa] = (sd.aPos[m.pa] || 0) + 1;
         }
         // Position-based tracking
         if (m.ph && m.pa) {
@@ -956,7 +964,7 @@ const aggregate = (pool, all, groups, conditions = []) => {
       tmPct[t][rd] = Object.entries(tm[t][rd]).map(([o, c]) => ({ o, pct: (c / D) * 100 })).sort((a, b) => b.pct - a.pct);
     }
   });
-  return { p, g3p, muPct, comboList, tmPct, posMu, posTm, posWho, tmPos, posVsTm, matchTm, matchWho, matchWin, matchPos, duelPos, tpc, matchByG3, matchChamp, gsShift, koShift, cutoff3rd, scoreDist, tieAcc, recAdv, nAccepted };
+  return { p, g3p, muPct, comboList, tmPct, posMu, posTm, posWho, tmPos, posVsTm, matchTm, matchWho, matchWin, matchPos, matchSide, duelPos, tpc, matchByG3, matchChamp, gsShift, koShift, cutoff3rd, scoreDist, tieAcc, recAdv, nAccepted };
 };
 
 // Gera o pool de simulações uma única vez e agrega. Retorna também o pool para
@@ -1062,6 +1070,7 @@ export default function WC2026() {
   const [matchWhoData, setMatchWhoData] = useState(null);
   const [matchWinData, setMatchWinData] = useState(null); // matchWin[mn] = {team: cnt vitórias}
   const [matchPosData, setMatchPosData] = useState(null);
+  const [matchSideData, setMatchSideData] = useState(null);
   const [duelPosData, setDuelPosData] = useState(null);
   const [duelExpand, setDuelExpand] = useState(null); // round name when expanded
   const [liveCard, setLiveCard] = useState(null); // idx of GS card expanded for in-game calc
@@ -1076,6 +1085,10 @@ export default function WC2026() {
   const [surSort, setSurSort] = useState('bits'); // ordenação da aba Surpresas: 'bits' | 'impact'
   const [surModels, setSurModels] = useState(false); // mostra a comparação de modelos (backtest) dentro da aba Surpresas
   const [bsShowAll, setBsShowAll] = useState(false); // mostra todos os 48 modelos do backtest (em vez do top 20)
+  const [bsfRat, setBsfRat] = useState({ fifa: true, elo: true, bet: true, pele: true }); // filtros do backtest: ratings incluídos
+  const [bsfTilt, setBsfTilt] = useState('any'); // 'any' | 'on' | 'off'
+  const [bsfFav, setBsfFav] = useState('any');
+  const [bsfMando, setBsfMando] = useState('any'); // 'any' | '0' | '70' | '150'
   const [comboCalcOrig, setComboCalcOrig] = useState(false); // calculadora 1°×3°: mostra a visão original (pré-Copa)
   const [confedNoIntra, setConfedNoIntra] = useState(false); // ignora confrontos intra-confederação (ex. UEFA×UEFA)
   const [confedSort, setConfedSort] = useState('aprov'); // ordenação da aba Confederações
@@ -1160,7 +1173,7 @@ export default function WC2026() {
 
   // Aplica um resultado agregado (de runMC ou reaggregate) em todos os estados das abas.
   const applyAgg = (r) => {
-    setRes(r.p); setG3p(r.g3p); setMuPct(r.muPct); setComboList(r.comboList); setTmPct(r.tmPct); setPosMu(r.posMu); setPosTm(r.posTm); setPosWho(r.posWho); setTmPosData(r.tmPos); setPosVsTmData(r.posVsTm); setMatchTmData(r.matchTm); setMatchWhoData(r.matchWho); setMatchWinData(r.matchWin); setMatchPosData(r.matchPos); setDuelPosData(r.duelPos); setTpcData(r.tpc); setMatchByG3Data(r.matchByG3); setMatchChampData(r.matchChamp); setGsShiftData(r.gsShift); setKoShiftData(r.koShift); setCutoff3rdData(r.cutoff3rd); setScoreDistData(r.scoreDist); setTieAccData(r.tieAcc); setRecAdvData(r.recAdv);
+    setRes(r.p); setG3p(r.g3p); setMuPct(r.muPct); setComboList(r.comboList); setTmPct(r.tmPct); setPosMu(r.posMu); setPosTm(r.posTm); setPosWho(r.posWho); setTmPosData(r.tmPos); setPosVsTmData(r.posVsTm); setMatchTmData(r.matchTm); setMatchWhoData(r.matchWho); setMatchWinData(r.matchWin); setMatchPosData(r.matchPos); setMatchSideData(r.matchSide); setDuelPosData(r.duelPos); setTpcData(r.tpc); setMatchByG3Data(r.matchByG3); setMatchChampData(r.matchChamp); setGsShiftData(r.gsShift); setKoShiftData(r.koShift); setCutoff3rdData(r.cutoff3rd); setScoreDistData(r.scoreDist); setTieAccData(r.tieAcc); setRecAdvData(r.recAdv);
   };
 
   // MC em BLOCOS: nunca bloqueia a UI por mais de ~um chunk (importante em 100k+ sims).
@@ -1181,7 +1194,7 @@ export default function WC2026() {
       const NB = Math.min(Math.max(100, Math.floor(+nSim) || 10000), 30000);
       const r = runMC(groups, NB, {}, []);
       _dynAdj = svDyn; // restaura p/ render (rt) e demais cálculos seguirem com o ajuste vigente
-      setBaseAgg({ p: r.p, g3p: r.g3p, muPct: r.muPct, comboList: r.comboList, tmPct: r.tmPct, posMu: r.posMu, matchTm: r.matchTm, posTm: r.posTm, posVsTm: r.posVsTm, tmPos: r.tmPos, cutoff3rd: r.cutoff3rd, tpc: r.tpc, matchWho: r.matchWho, n: NB });
+      setBaseAgg({ p: r.p, g3p: r.g3p, muPct: r.muPct, comboList: r.comboList, tmPct: r.tmPct, posMu: r.posMu, matchTm: r.matchTm, posTm: r.posTm, posVsTm: r.posVsTm, tmPos: r.tmPos, posWho: r.posWho, matchPos: r.matchPos, matchWin: r.matchWin, matchSide: r.matchSide, cutoff3rd: r.cutoff3rd, tpc: r.tpc, matchWho: r.matchWho, n: NB });
     } catch (err) { /* baseline é só indicador; falha não quebra o app */ }
   };
   const maybeBaseline = () => { const mk = modelKey(); if (baseKeyRef.current !== mk) { baseKeyRef.current = mk; computeBaseline(); } };
@@ -1190,6 +1203,7 @@ export default function WC2026() {
   const doMC = () => {
     const runKey = urKey(userRes); // resultados que ESTE MC vai incorporar
     if (running) return; // já rodando (efeitos automáticos não cancelam nem empilham)
+    didRun.current = true; // a partir da 1ª rodada manual, trocas de modelo voltam a re-rodar
     const N = Math.max(100, Math.floor(+nSim) || 10000); // tolera campo vazio/inválido; sem teto superior
     // Elo dinâmico: calcula o ajuste uma vez (depende dos globais de modelo) e reaplica a cada chunk.
     _rSys = rSys; _customElo = customElo; _ME = customME; _useTilt = useTilt; _fav = favWeight; _spread = spread; _injM = injuries; _hb = homeAdv;
@@ -1513,10 +1527,13 @@ export default function WC2026() {
         <div style={{ fontSize: '11px', color: dm, marginBottom: '10px', lineHeight: 1.5 }}>Compara 48 configurações de modelo (4 ratings × tilt on/off × favoritismo on/off × mando 0/70/150) contra os <strong>{nFilled}</strong> jogos de fase de grupos já preenchidos, medindo <strong>Brier</strong> e <strong>log-loss</strong> (menor = melhor). Útil para descobrir qual modelo está acertando mais durante a Copa. Lesões não entram (são prospectivas).</div>
         <button onClick={runBacktest} disabled={bsLoading || nFilled < 1} style={{ padding: '7px 14px', fontSize: '12px', fontWeight: 700, background: nFilled < 1 ? card : `${acc}33`, color: nFilled < 1 ? dm : acc, border: `1px solid ${nFilled < 1 ? bd : acc}`, borderRadius: '5px', cursor: nFilled < 1 ? 'default' : 'pointer', marginBottom: '12px' }}>{bsLoading ? 'Calculando…' : nFilled < 1 ? 'Preencha resultados de grupo primeiro' : `🔬 Rodar backtest (${nFilled} jogos)`}</button>
         {bsData && bsData.n > 0 && (() => {
-          const best = bsData.results.find(r => !r.random); const bestLL = [...bsData.results].filter(r => !r.random).sort((a, b) => a.logloss - b.logloss)[0];
-          const randomEntry = bsData.results.find(r => r.random); const randomRank = bsData.results.indexOf(randomEntry) + 1;
-          const nModels = bsData.results.filter(r => !r.random).length;
-          const rows = bsShowAll ? bsData.results : bsData.results.slice(0, 20); const randomShown = rows.includes(randomEntry);
+          // Filtros por dimensão (rating / tilt / favoritismo / mando). Linha aleatória sempre passa.
+          const passes = r => r.random || (bsfRat[r.rs] && (bsfTilt === 'any' || (bsfTilt === 'on') === !!r.tl) && (bsfFav === 'any' || (bsfFav === 'on') === !!r.fv) && (bsfMando === 'any' || r.hbv === +bsfMando));
+          const results = bsData.results.filter(passes);
+          const best = results.find(r => !r.random); const bestLL = [...results].filter(r => !r.random).sort((a, b) => a.logloss - b.logloss)[0];
+          const randomEntry = results.find(r => r.random); const randomRank = results.indexOf(randomEntry) + 1;
+          const nModels = results.filter(r => !r.random).length;
+          const rows = bsShowAll ? results : results.slice(0, 20); const randomShown = rows.includes(randomEntry);
           const rowOf = (r, rank) => (
             <tr key={rank} style={{ background: r.random ? `${acc}14` : rank === 1 ? `${gn}11` : 'transparent', borderTop: r.random && !randomShown ? `1px dashed ${acc}66` : undefined }}>
               <td style={{ padding: '3px 6px', textAlign: 'right', color: r.random ? acc : dm }}>{rank}</td>
@@ -1528,9 +1545,21 @@ export default function WC2026() {
               <td style={{ padding: '3px 6px', textAlign: 'right', color: r === bestLL ? bl : dm }}>{r.logloss.toFixed(4)}</td>
             </tr>
           );
+          const FB = ({ active, onClick, children }) => <button onClick={onClick} style={{ padding: '2px 7px', fontSize: '9px', fontWeight: active ? 700 : 400, background: active ? `${acc}33` : 'transparent', color: active ? acc : dm, border: `1px solid ${active ? acc : bd}`, borderRadius: '3px', cursor: 'pointer' }}>{children}</button>;
           return (
             <div>
               <div style={{ fontSize: '10px', color: dm, marginBottom: '6px' }}>Baseado em {bsData.n} jogos. {bsData.n < 12 && <span style={{ color: acc }}>Amostra pequena — resultados ainda ruidosos.</span>} Brier varia de 0 (perfeito) a 2; o modelo aleatório (🎲) é a linha de base — qualquer modelo abaixo dele tem skill.</div>
+              <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', alignItems: 'center', marginBottom: '8px', fontSize: '9px' }}>
+                <span style={{ color: dm }}>Rating:</span>
+                {['fifa', 'elo', 'bet', 'pele'].map(rs => <FB key={rs} active={bsfRat[rs]} onClick={() => setBsfRat(p => ({ ...p, [rs]: !p[rs] }))}>{RAT[rs]}</FB>)}
+                <span style={{ color: dm, marginLeft: '4px' }}>Tilt:</span>
+                {['any', 'on', 'off'].map(v => <FB key={v} active={bsfTilt === v} onClick={() => setBsfTilt(v)}>{v === 'any' ? 'todos' : v}</FB>)}
+                <span style={{ color: dm, marginLeft: '4px' }}>Favorit.:</span>
+                {['any', 'on', 'off'].map(v => <FB key={v} active={bsfFav === v} onClick={() => setBsfFav(v)}>{v === 'any' ? 'todos' : v}</FB>)}
+                <span style={{ color: dm, marginLeft: '4px' }}>Mando:</span>
+                {['any', '0', '70', '150'].map(v => <FB key={v} active={bsfMando === v} onClick={() => setBsfMando(v)}>{v === 'any' ? 'todos' : v}</FB>)}
+              </div>
+              {nModels === 0 ? <div style={{ padding: '14px', textAlign: 'center', color: dm, fontSize: '11px' }}>Nenhum modelo no filtro atual.</div> : <>
               <div style={{ overflowX: 'auto' }}>
               <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '11px', minWidth: '440px' }}>
                 <thead><tr>{['#', 'Rating', 'Tilt', 'Favorit.', 'Mando', 'Brier ↓', 'Log-loss'].map(h => <th key={h} style={{ padding: '4px 6px', textAlign: h === 'Rating' ? 'left' : 'right', color: dm, fontSize: '9px', borderBottom: `1px solid ${bd}` }}>{h}</th>)}</tr></thead>
@@ -1540,7 +1569,8 @@ export default function WC2026() {
                 </tbody>
               </table>
               </div>
-              <div style={{ fontSize: '10px', color: dm, marginTop: '8px' }}>🏆 Melhor por Brier: <strong style={{ color: gn }}>{RAT[best.rs]}{best.tl ? ' +tilt' : ''}{best.fv ? ' +favorit.' : ''} · mando {best.hbv}</strong> (Brier {best.brier.toFixed(4)}). <strong style={{ color: acc }}>{bsData.nBeat}</strong> de {nModels} modelos superam o aleatório. {bsShowAll ? `Mostrando todos os ${nModels}.` : `Mostrando as 20 melhores de ${nModels}.`} <span onClick={() => setBsShowAll(v => !v)} style={{ color: acc, cursor: 'pointer', textDecoration: 'underline', fontWeight: 700 }}>{bsShowAll ? 'ver só top 20' : `ver todos (${nModels})`}</span></div>
+              <div style={{ fontSize: '10px', color: dm, marginTop: '8px' }}>🏆 Melhor por Brier: <strong style={{ color: gn }}>{RAT[best.rs]}{best.tl ? ' +tilt' : ''}{best.fv ? ' +favorit.' : ''} · mando {best.hbv}</strong> (Brier {best.brier.toFixed(4)}). <strong style={{ color: acc }}>{bsData.nBeat}</strong> de 48 superam o aleatório. {nModels < 48 && <span style={{ color: acc }}>({nModels} no filtro.)</span>} {bsShowAll ? `Mostrando todos os ${nModels}.` : `Mostrando os 20 melhores de ${nModels}.`} {nModels > 20 && <span onClick={() => setBsShowAll(v => !v)} style={{ color: acc, cursor: 'pointer', textDecoration: 'underline', fontWeight: 700 }}>{bsShowAll ? 'ver só top 20' : `ver todos (${nModels})`}</span>}</div>
+              </>}
             </div>
           );
         })()}
@@ -1676,7 +1706,8 @@ export default function WC2026() {
 
   // Auto-run 10k on first load
   const didRun = useRef(false);
-  useEffect(() => { if (!didRun.current) { didRun.current = true; setTimeout(doMC, 300); } }, []);
+  // Não roda o MC automaticamente ao abrir — o usuário inicia com o ▶ (evita travar na abertura).
+  // didRun passa a true dentro do doMC, então as trocas de modelo seguem re-rodando após a 1ª simulação.
   // Auto-rerun when rating system changes
   const prevRSys = useRef(rSys);
   useEffect(() => { if (prevRSys.current !== rSys) { prevRSys.current = rSys; doMC(); } }, [rSys]);
@@ -1754,6 +1785,7 @@ export default function WC2026() {
 
   const [probSort, setProbSort] = useState('ch');
   const [probSortDir, setProbSortDir] = useState(-1); // -1 = desc
+  const [probsOrig, setProbsOrig] = useState(false); // "ver pré-Copa": mostra toda a aba Probs a partir da baseline
   const ranked = useMemo(() => {
     if (!res) return [];
     return all.map(t => {
@@ -1776,6 +1808,65 @@ export default function WC2026() {
       return probSortDir === -1 ? vb - va : va - vb;
     });
   }, [res, all, probSort, probSortDir]);
+  // Mesmo ranking, mas a partir da baseline pré-Copa (para o modo "ver pré-Copa" da aba Probs).
+  const rankedOrig = useMemo(() => {
+    const src = baseAgg?.p;
+    if (!src) return [];
+    return all.map(t => {
+      const r = { t, ...src[t], elo: rt(t) };
+      const grp = Object.entries(groups).find(([, ts]) => ts.includes(t));
+      r.gsOpp = grp ? Math.round(grp[1].filter(x => x !== t).reduce((s, x) => s + rt(x), 0) / 3) : 0;
+      const phaseAvgs = [];
+      [['R32', 'oppR32'], ['R16', 'oppR16'], ['QF', 'oppQF'], ['SF', 'oppSF'], ['Fin', 'oppFin']].forEach(([, pk]) => { if (r[pk + 'N'] > 0) phaseAvgs.push(r[pk + 'S'] / r[pk + 'N']); });
+      r.koOpp = phaseAvgs.length > 0 ? Math.round(phaseAvgs.reduce((s, v) => s + v, 0) / phaseAvgs.length) : 0;
+      r.allOpp = r.koOpp > 0 ? Math.round((r.gsOpp + r.koOpp * phaseAvgs.length) / (1 + phaseAvgs.length)) : r.gsOpp;
+      return r;
+    }).sort((a, b) => {
+      if (probSort === 't') return probSortDir === 1 ? nm(a.t).localeCompare(nm(b.t)) : nm(b.t).localeCompare(nm(a.t));
+      const va = a[probSort] ?? 0, vb = b[probSort] ?? 0;
+      return probSortDir === -1 ? vb - va : va - vb;
+    });
+  }, [baseAgg, all, probSort, probSortDir]);
+
+  // ── Confirmação MATEMÁTICA (clinch) a partir de userRes — para mostrar ✓ no lugar de 100%.
+  // Sound: só confirma quando é a ÚNICA possibilidade (nunca por "prob. alta" no MC).
+  const clinch = useMemo(() => {
+    const st = resolveStandings(groups, userRes);
+    const ko = resolveKO(st, userRes);
+    const grp = {};
+    Object.entries(groups).forEach(([gn, ts]) => {
+      const played = {}, pts = {};
+      ts.forEach(t => { played[t] = 0; pts[t] = 0; });
+      GS.forEach(([g, hi, ai], idx) => {
+        if (g !== gn) return; const fx = userRes[idx]; if (fx?.gA == null || fx?.gB == null) return;
+        const h = ts[hi], a = ts[ai]; played[h]++; played[a]++;
+        if (fx.gA > fx.gB) pts[h] += 3; else if (fx.gA < fx.gB) pts[a] += 3; else { pts[h]++; pts[a]++; }
+      });
+      const min = {}, max = {}, c1 = {}, cAdv = {}, exact = {};
+      ts.forEach(t => { min[t] = pts[t]; max[t] = pts[t] + 3 * (3 - played[t]); });
+      const ready = st.groupReady[gn];
+      const sorted = ready ? (st.st[gn]?.sorted || []) : null;
+      ts.forEach(t => {
+        c1[t] = ts.every(r => r === t || min[t] > max[r]); // 1º garantido (não pode nem empatar em pts)
+        cAdv[t] = ts.filter(r => r !== t && max[r] >= min[t]).length <= 1; // top-2 garantido
+        exact[t] = sorted ? (sorted.indexOf(t) + 1) || null : null; // posição exata quando o grupo fechou
+      });
+      grp[gn] = { c1, cAdv, exact, ready };
+    });
+    const PHASE = { r16: 'R16', qf: 'QF', sf: 'SF', fin: 'FIN', ch: 'FIN' };
+    const reached = (t, roundKey) => { const ph = PHASE[roundKey]; if (!ph) return false; for (let mn = 73; mn <= 104; mn++) { const m = ko[mn]; if (m && m.ph === ph && (m.h === t || m.a === t)) return true; } return false; };
+    return { st, ko, grp,
+      // posição exata confirmada (1º/2º/3º/4º) do time t no seu grupo
+      confPos: (gn, t, pos) => { const G = grp[gn]; if (!G) return false; if (G.exact[t]) return G.exact[t] === pos; return pos === 1 && G.c1[t]; },
+      // time t joga deterministicamente a partida mn (slot resolvido)
+      confPlay: (t, mn) => { const m = ko[mn]; return !!(m && (m.h === t || m.a === t)); },
+      // time t alcançou deterministicamente a fase roundKey (r16/qf/sf/fin/ch)
+      confReach: reached,
+      // 3º do grupo gn avança (corte dos 8 já decidido)
+      confThird: (gn) => st.allReady && !!st.b8m[gn],
+    };
+  }, [groups, userRes]);
+  const pctC = (pct, confirmed, dec = 0) => confirmed ? '✓' : (pct).toFixed(dec) + '%';
 
   // Colors
   const bg = '#0a0f1a', card = '#111827', acc = '#c9a84c', accD = '#8b6914';
@@ -1860,9 +1951,9 @@ export default function WC2026() {
         <p style={{ fontSize: '11px', color: dm, marginTop: '2px', letterSpacing: '1.5px', textTransform: 'uppercase' }}>Simulador Monte Carlo</p>
       </header>
 
-      {!res && !single ? (
+      {running && !res && !single ? (
         <div style={{ textAlign: 'center', padding: '80px 20px' }}>
-          <div style={{ fontSize: '14px', color: acc, marginBottom: '8px' }}>⏳ Carregando simulação inicial...</div>
+          <div style={{ fontSize: '14px', color: acc, marginBottom: '8px' }}>⏳ Rodando a simulação...</div>
           <div style={{ fontSize: '11px', color: dm }}>Simulando {(+nSim || 0).toLocaleString()} Copas com modelo Poisson + Elo</div>
         </div>
       ) : (<>
@@ -2017,14 +2108,16 @@ export default function WC2026() {
         )}
 
         {/* PROBS */}
-        {tab === 'probs' && (
-          !res ? <div style={{ padding: '60px', textAlign: 'center', color: dm }}>Rode a simulação</div> :
+        {tab === 'probs' && ((res, posWho, g3p, comboList, matchWhoData, matchTmData, matchPosData, matchWinData, matchSideData, mcN, ranked) => (
+          !res ? <div style={{ padding: '60px', textAlign: 'center', color: dm }}>Rode a simulação (clique ▶ no topo)</div> :
           <div style={{ ...cs, overflowX: 'auto' }}>
-            <div style={{ display: 'flex', gap: '3px', marginBottom: '8px' }}>
+            <div style={{ display: 'flex', gap: '3px', marginBottom: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
               <SB active={probsView === 'table'} onClick={() => setProbsView('table')}>Geral</SB>
               <SB active={probsView === 'group'} onClick={() => setProbsView('group')}>Por Grupo</SB>
               <SB active={probsView === 'bracket'} onClick={() => setProbsView('bracket')}>Bracket</SB>
+              {baseAgg && <button onClick={() => setProbsOrig(v => !v)} title="Mostra toda a aba Probs como teria ficado antes do torneio (simulação pré-Copa, sem resultados)" style={{ marginLeft: '8px', padding: '4px 9px', fontSize: '10px', fontWeight: 700, background: probsOrig ? `${acc}33` : card, color: probsOrig ? acc : dm, border: `1px solid ${probsOrig ? acc : bd}`, borderRadius: '4px', cursor: 'pointer' }}>{probsOrig ? '↩ ver agora' : '👁 ver pré-Copa'}</button>}
             </div>
+            {probsOrig && baseAgg && <div style={{ fontSize: '10px', color: acc, marginBottom: '6px', background: `${acc}12`, padding: '5px 8px', borderRadius: '4px', border: `1px solid ${acc}44` }}>👁 Vendo a simulação <strong>pré-Copa</strong> (sem nenhum resultado) — como as chances estavam antes do torneio começar.</div>}
             <div style={{ fontSize: '10px', color: dm, marginBottom: '6px' }}>Sistema: <strong style={{ color: acc }}>{rSys === 'elo' ? 'Elo (eloratings.net)' : rSys === 'bet' ? 'Apostas (implícito)' : rSys === 'pele' ? 'PELE (Silver Bulletin)' : rSys === 'custom' ? 'Custom' : 'FIFA Ranking'}</strong>{useTilt ? <span style={{ color: dm }}> • 🎯 Tilt ativo</span> : ''} • {(+nSim || 0).toLocaleString()} simulações{mcMeta && mcMeta.conds && mcMeta.conds.length > 0 ? <span style={{ color: mcMeta.nAccepted < 200 ? rd : acc }}> • 🔎 condicionado: {mcMeta.nAccepted.toLocaleString()} aceitas ({(mcMeta.nAccepted / mcMeta.n * 100).toFixed(1)}%)</span> : ''}{nFx > 0 ? ` • ✓ ${nFx} resultado(s)` : ''}</div>
             {mcMeta && mcMeta.conds && mcMeta.conds.length > 0 && mcMeta.nAccepted < 200 && <div style={{ fontSize: '10px', color: rd, marginBottom: '6px', background: '#ef444415', padding: '5px 8px', borderRadius: '4px', border: '1px solid #ef444444' }}>⚠ Amostra condicional pequena ({mcMeta.nAccepted} sims) — os percentuais têm ruído alto. Aumente o nº de simulações ou relaxe as condições.</div>}
             {probsView === 'table' && <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '11px', minWidth: '780px' }}>
@@ -2176,7 +2269,7 @@ export default function WC2026() {
                       <span style={{ color: w ? tx : dm, fontWeight: w ? 600 : 400, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
                         <span style={{ fontSize:'7px', color: bl, marginRight:'2px' }}>{p}</span>{t !== '?' ? `${fl(t)}${nm(t)}` : '?'}
                       </span>
-                      <span style={{ fontSize:'8px', color: w ? '#22c55e' : dm, fontWeight: 600 }}>{pct > 0 ? pct.toFixed(0)+'%' : ''}</span>
+                      <span style={{ fontSize:'8px', color: w ? '#22c55e' : dm, fontWeight: 600 }}>{!probsOrig && t !== '?' && clinch.confPlay(t, mn) ? '✓' : pct > 0 ? pct.toFixed(0)+'%' : ''}</span>
                     </div>;
                   })}
                 </div>
@@ -2195,7 +2288,7 @@ export default function WC2026() {
                   <div onClick={() => setBracketSel(s => s?.type === 'group' && s.gn === gn ? null : { type: 'group', gn })} title="Clique para ver a distribuição completa por posição" style={{ background: card, borderRadius:'4px', border:`1px solid ${bracketSel?.type === 'group' && bracketSel.gn === gn ? acc : bd}`, minWidth:'115px', maxWidth:'145px', cursor:'pointer' }}>
                     <div style={{ fontSize:'8px', fontWeight:700, color:acc, padding:'2px 4px', borderBottom:`1px solid ${bd}33`, display:'flex', justifyContent:'space-between' }}>
                       <span>Grupo {gn}</span>
-                      <span style={{ fontSize:'7px', color: isTop8 ? '#22c55e' : '#ef4444' }}>3{"°↑"}{g3adv.toFixed(0)}%</span>
+                      <span style={{ fontSize:'7px', color: isTop8 ? '#22c55e' : '#ef4444' }}>3{"°↑"}{!probsOrig && clinch.confThird(gn) ? '✓' : g3adv.toFixed(0)+'%'}</span>
                     </div>
                     {positions.map(({ pk, t, pct, p }) => {
                       const adv = p <= 2 || (p === 3 && isTop8);
@@ -2203,7 +2296,7 @@ export default function WC2026() {
                         <span style={{ color: adv ? tx : dm, fontWeight: p===1 ? 600 : 400 }}>
                           <span style={{ fontSize:'7px', color: adv ? '#22c55e' : p===4 ? '#ef4444' : '#ef4444', marginRight:'2px' }}>{pk}</span>{t ? `${fl(t)}${nm(t)}` : '?'}
                         </span>
-                        <span style={{ fontSize:'8px', color: pct > 60 ? '#22c55e' : pct > 30 ? acc : dm }}>{pct.toFixed(0)}%</span>
+                        <span style={{ fontSize:'8px', color: pct > 60 ? '#22c55e' : pct > 30 ? acc : dm }}>{!probsOrig && t && clinch.confPos(gn, t, p) ? '✓' : pct.toFixed(0)+'%'}</span>
                       </div>;
                     })}
                   </div>
@@ -2327,7 +2420,7 @@ export default function WC2026() {
                                   <div key={gn} style={{ display: 'grid', gridTemplateColumns: '24px 70px 36px 1fr', gap: '4px', alignItems: 'center', fontSize: '10px', padding: '1px 0' }}>
                                     <span style={{ fontWeight: 700, color: isIn ? '#22c55e' : '#ef4444' }}>3°{gn}</span>
                                     <div style={{ height: '8px', background: `${bl}18`, borderRadius: '2px' }}><div style={{ height: '100%', width: `${Math.min(pct, 100)}%`, background: isIn ? '#22c55e' : '#ef4444', borderRadius: '2px' }} /></div>
-                                    <span style={{ textAlign: 'right', fontWeight: 700, color: isIn ? '#22c55e' : '#ef4444' }}>{pct.toFixed(0)}%</span>
+                                    <span style={{ textAlign: 'right', fontWeight: 700, color: isIn ? '#22c55e' : '#ef4444' }}>{!probsOrig && clinch.confThird(gn) ? '✓' : pct.toFixed(0)+'%'}</span>
                                     <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: dm }}>{cands.map(([t, c]) => `${fl(t)} ${nm(t)} ${(c / mcN * 100).toFixed(0)}%`).join(' · ')}</span>
                                   </div>
                                 );
@@ -2366,54 +2459,44 @@ export default function WC2026() {
                     }
                     if (bracketSel.type === 'match') {
                       const mn = bracketSel.mn;
-                      const who = Object.entries(matchWhoData?.[mn] || {}).sort((a, b) => b[1] - a[1]);
-                      const othersPct = who.slice(12).reduce((s, [, c]) => s + c / mcN * 100, 0);
-                      const nextK = mn <= 88 ? 'r16' : mn <= 96 ? 'qf' : mn <= 100 ? 'sf' : mn <= 102 ? 'fin' : mn === 103 ? 'p3' : 'ch';
-                      const nextL = { r16: 'R16%', qf: 'QF%', sf: 'SF%', fin: 'Final%', p3: '🥉%', ch: '🏆%' }[nextK];
-                      const pairs = Object.entries(matchTmData?.[mn] || {}).sort((a, b) => b[1] - a[1]).slice(0, 8);
-                      const poss = Object.entries(matchPosData?.[mn] || {}).sort((a, b) => b[1] - a[1]).slice(0, 8);
+                      const ms = matchSideData?.[mn] || {};
+                      const baseMs = baseAgg?.matchSide?.[mn];
+                      const sideLabel = sp => !sp ? '?' : sp.t === 'pos' ? `${sp.p}º do grupo ${sp.g}` : sp.t === '3rd' ? '3º colocado (repescagem)' : sp.t === 'win' ? `Vencedor M${sp.m}` : sp.t === 'lose' ? `Perdedor M${sp.m}` : '?';
+                      // Renderiza um lado (times + posições) a partir de matchSide
+                      const renderSide = (whoObj, posObj, baseWho, label, accent) => {
+                        const who = Object.entries(whoObj || {}).sort((a, b) => b[1] - a[1]);
+                        const pos = Object.entries(posObj || {}).sort((a, b) => b[1] - a[1]);
+                        const others = who.slice(10).reduce((s, [, c]) => s + c, 0) / mcN * 100;
+                        return (
+                          <div>
+                            <div style={{ fontSize: '10px', fontWeight: 700, color: accent, borderBottom: `1px solid ${bd}`, paddingBottom: '2px', marginBottom: '3px' }}>{label}</div>
+                            {who.slice(0, 10).map(([t, c]) => {
+                              const pPlay = c / mcN * 100;
+                              return (
+                                <div key={t} style={{ display: 'grid', gridTemplateColumns: '1fr 70px 56px', gap: '4px', alignItems: 'center', fontSize: '10px', padding: '1px 0' }}>
+                                  <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{fl(t)} {nm(t)}</span>
+                                  <div style={{ height: '7px', background: `${accent}18`, borderRadius: '2px' }}><div style={{ height: '100%', width: `${Math.min(pPlay, 100)}%`, background: accent, borderRadius: '2px' }} /></div>
+                                  <span style={{ textAlign: 'right', fontWeight: 700, color: accent }}>{!probsOrig && clinch.confPlay(t, mn) ? '✓' : pPlay.toFixed(1) + '%'}{!probsOrig && dTag(pPlay, baseWho ? (baseWho[t] || 0) / baseN * 100 : null)}</span>
+                                </div>
+                              );
+                            })}
+                            {others > 0.05 && <div style={{ fontSize: '9px', color: dm, paddingTop: '2px' }}>+ outros: {others.toFixed(1)}%</div>}
+                            {pos.length > 0 && <div style={{ marginTop: '4px', display: 'flex', gap: '3px', flexWrap: 'wrap' }}>
+                              {pos.slice(0, 8).map(([p, c]) => <span key={p} style={{ padding: '1px 5px', fontSize: '8px', borderRadius: '3px', background: `${bl}18`, color: bl, border: `1px solid ${bl}33`, fontFamily: 'monospace' }}>{p} {(c / mcN * 100).toFixed(0)}%</span>)}
+                            </div>}
+                          </div>
+                        );
+                      };
                       return (
                         <div style={{ marginBottom: '12px', padding: '8px 10px', background: card, borderRadius: '6px', border: `1px solid ${acc}55`, maxWidth: '720px' }}>
                           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
                             <span style={{ fontSize: '11px', fontWeight: 700, color: acc }}>M{mn} • {KO_SPEC[mn]?.l} • {DOW(KO_DATE[mn])} {KO_DATE[mn]} {KO_BRT[mn]} • {KO_CITY[mn]}</span>
                             {closeBtn}
                           </div>
-                          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', alignItems: 'start' }}>
-                            <div>
-                              <div style={{ display: 'grid', gridTemplateColumns: '1fr 80px 46px 46px 46px', gap: '4px', fontSize: '8px', color: dm, fontWeight: 600, padding: '0 0 2px', borderBottom: `1px solid ${bd}` }}>
-                                <span>Quem joga esta partida</span><span /><span style={{ textAlign: 'right' }}>joga%</span><span style={{ textAlign: 'right' }} title="P(vence | joga esta partida)">vence%*</span><span style={{ textAlign: 'right' }} title="Probabilidade incondicional (todas as sims)">{nextL}</span>
-                              </div>
-                              {who.slice(0, 12).map(([t, c]) => {
-                                const pPlay = c / mcN * 100;
-                                const pWin = matchWinData?.[mn]?.[t] ? matchWinData[mn][t] / c * 100 : 0;
-                                return (
-                                  <div key={t} style={{ display: 'grid', gridTemplateColumns: '1fr 80px 46px 46px 46px', gap: '4px', alignItems: 'center', fontSize: '10px', padding: '1px 0' }}>
-                                    <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{fl(t)} {nm(t)}</span>
-                                    <div style={{ height: '8px', background: `${acc}18`, borderRadius: '2px' }}><div style={{ height: '100%', width: `${Math.min(pPlay, 100)}%`, background: acc, borderRadius: '2px' }} /></div>
-                                    <span style={{ textAlign: 'right', fontWeight: 700, color: acc }}>{pPlay.toFixed(1)}%{dTag(pPlay, baseAgg?.matchWho?.[mn] ? (baseAgg.matchWho[mn][t] || 0) / baseN * 100 : null)}</span>
-                                    <span style={{ textAlign: 'right', color: gn }}>{pWin.toFixed(0)}%</span>
-                                    <span style={{ textAlign: 'right', color: dm }}>{(res[t]?.[nextK] || 0).toFixed(1)}%{dTag(res[t]?.[nextK] || 0, baseAgg?.p?.[t]?.[nextK])}</span>
-                                  </div>
-                                );
-                              })}
-                              {othersPct > 0.05 && <div style={{ fontSize: '9px', color: dm, paddingTop: '2px' }}>+ outros: {othersPct.toFixed(1)}%</div>}
-                              <div style={{ fontSize: '8px', color: dm, marginTop: '4px', fontStyle: 'italic' }}>* vence% = P(vencer | estar nesta partida); {nextL} = prob. incondicional.</div>
-                            </div>
-                            <div>
-                              <div style={{ fontSize: '9px', fontWeight: 700, color: bl, marginBottom: '2px' }}>Confrontos mais prováveis</div>
-                              {pairs.map(([k, c]) => { const [a2, b2] = k.split('|'); return (
-                                <div key={k} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '10px', padding: '1px 0' }}>
-                                  <span>{fl(a2)} {nm(a2)} <span style={{ color: dm }}>vs</span> {fl(b2)} {nm(b2)}</span>
-                                  <span style={{ fontWeight: 700, color: bl }}>{(c / mcN * 100).toFixed(1)}%{dTag(c / mcN * 100, baseAgg?.matchTm?.[mn] ? (baseAgg.matchTm[mn][k] || 0) / baseN * 100 : null)}</span>
-                                </div>
-                              ); })}
-                              {poss.length > 0 && <>
-                                <div style={{ fontSize: '9px', fontWeight: 700, color: bl, margin: '6px 0 2px' }}>Posições nesta partida</div>
-                                <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
-                                  {poss.map(([k, c]) => <span key={k} style={{ padding: '1px 6px', fontSize: '9px', borderRadius: '3px', background: `${bl}18`, color: bl, border: `1px solid ${bl}33`, fontFamily: 'monospace' }}>{k} {(c / mcN * 100).toFixed(0)}%</span>)}
-                                </div>
-                              </>}
-                            </div>
+                          <div style={{ fontSize: '8px', color: dm, marginBottom: '6px' }}>Quem (e qual posição de grupo) pode ocupar cada lado do confronto.</div>
+                          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px', alignItems: 'start' }}>
+                            {renderSide(ms.hWho, ms.hPos, baseMs?.hWho, `Mandante — ${sideLabel(KO_SPEC[mn]?.h)}`, gn)}
+                            {renderSide(ms.aWho, ms.aPos, baseMs?.aWho, `Visitante — ${sideLabel(KO_SPEC[mn]?.a)}`, bl)}
                           </div>
                         </div>
                       );
@@ -2438,7 +2521,7 @@ export default function WC2026() {
                                   return (
                                     <div key={t} style={{ display: 'grid', gridTemplateColumns: '1fr 40px', gap: '4px', alignItems: 'center', fontSize: '10px', padding: '1px 0' }}>
                                       <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: pct > 50 ? tx : dm }}>{fl(t)} {nm(t)}</span>
-                                      <span style={{ textAlign: 'right', fontWeight: 600, color: pct > 50 ? gn : pct > 20 ? acc : dm }}>{pct.toFixed(1)}%{dTag(pct, basePos(t))}</span>
+                                      <span style={{ textAlign: 'right', fontWeight: 600, color: pct > 50 ? gn : pct > 20 ? acc : dm }}>{!probsOrig && clinch.confPos(gName, t, p) ? '✓' : <>{pct.toFixed(1)}%{dTag(pct, basePos(t))}</>}</span>
                                     </div>
                                   );
                                 })}
@@ -2453,10 +2536,22 @@ export default function WC2026() {
               );
             })()}
           </div>
+        ))(
+          probsOrig && baseAgg ? baseAgg.p : res,
+          probsOrig && baseAgg ? baseAgg.posWho : posWho,
+          probsOrig && baseAgg ? baseAgg.g3p : g3p,
+          probsOrig && baseAgg ? baseAgg.comboList : comboList,
+          probsOrig && baseAgg ? baseAgg.matchWho : matchWhoData,
+          probsOrig && baseAgg ? baseAgg.matchTm : matchTmData,
+          probsOrig && baseAgg ? baseAgg.matchPos : matchPosData,
+          probsOrig && baseAgg ? baseAgg.matchWin : matchWinData,
+          probsOrig && baseAgg ? baseAgg.matchSide : matchSideData,
+          probsOrig && baseAgg ? baseAgg.n : mcN,
+          probsOrig && baseAgg ? rankedOrig : ranked,
         )}
 
         {/* GROUP PROBS */}
-        {tab === 'probs' && probsView === 'group' && (
+        {tab === 'probs' && probsView === 'group' && ((res, posWho, g3p, comboList, matchWhoData, matchTmData, matchPosData, matchWinData, matchSideData, mcN, ranked) => (
           !res ? <div style={{ padding: '60px', textAlign: 'center', color: dm }}>Rode a simulação</div> :
           <div style={cs}>
             <div style={{ display: 'flex', gap: '6px', alignItems: 'center', marginBottom: '10px', flexWrap: 'wrap' }}>
@@ -2514,6 +2609,18 @@ export default function WC2026() {
               })}
             </div>
           </div>
+        ))(
+          probsOrig && baseAgg ? baseAgg.p : res,
+          probsOrig && baseAgg ? baseAgg.posWho : posWho,
+          probsOrig && baseAgg ? baseAgg.g3p : g3p,
+          probsOrig && baseAgg ? baseAgg.comboList : comboList,
+          probsOrig && baseAgg ? baseAgg.matchWho : matchWhoData,
+          probsOrig && baseAgg ? baseAgg.matchTm : matchTmData,
+          probsOrig && baseAgg ? baseAgg.matchPos : matchPosData,
+          probsOrig && baseAgg ? baseAgg.matchWin : matchWinData,
+          probsOrig && baseAgg ? baseAgg.matchSide : matchSideData,
+          probsOrig && baseAgg ? baseAgg.n : mcN,
+          probsOrig && baseAgg ? rankedOrig : ranked,
         )}
 
         {/* CRUZAMENTOS */}
@@ -4298,6 +4405,18 @@ export default function WC2026() {
                 else if (fx.gA < fx.gB) { tb[a].pts += 3; tb[a].w++; tb[h].l++; }
                 else { tb[h].pts++; tb[a].pts++; tb[h].d++; tb[a].d++; }
               });
+              const stt = resolveStandings(groups, userRes);
+              // Ranking dos 3ºs (atual): 3º de cada grupo pela ordem corrente, top 8 avançam.
+              const thirdsRank = Object.entries(groups).map(([gn, ts]) => {
+                const sorted = ts.slice().sort((a, b) => tb[b].pts - tb[a].pts || tb[b].gd - tb[a].gd || tb[b].gf - tb[a].gf);
+                const t = sorted[2];
+                return { gn, t, pts: tb[t].pts, gd: tb[t].gd, gf: tb[t].gf, played: tb[t].p, ready: stt.groupReady[gn] };
+              }).sort((a, b) => b.pts - a.pts || b.gd - a.gd || b.gf - a.gf);
+              // Bracket "as it stands" — determinístico das classificações atuais (sem simular).
+              const koNow = resolveKO(stt, userRes);
+              const phOrder = ['R32', 'R16', 'QF', 'SF', '3°', 'FIN'];
+              const phLbl = { R32: 'R32', R16: 'Oitavas', QF: 'Quartas', SF: 'Semis', '3°': '3º lugar', FIN: 'Final' };
+              const koByPhase = {}; for (let mn = 73; mn <= 104; mn++) { const m = koNow[mn]; (koByPhase[m.ph] = koByPhase[m.ph] || []).push(m); }
               return (
                 <div style={{ marginBottom: '14px' }}>
                   <div style={{ fontSize: '12px', fontWeight: 700, color: bl, marginBottom: '6px' }}>📊 Classificação parcial (resultados inseridos)</div>
@@ -4322,6 +4441,45 @@ export default function WC2026() {
                       );
                     }).filter(Boolean)}
                   </div>
+
+                  {/* Ranking dos 3ºs colocados */}
+                  <div style={{ fontSize: '12px', fontWeight: 700, color: bl, margin: '16px 0 6px' }}>🥉 Ranking dos 3ºs colocados <span style={{ fontSize: '9px', color: dm, fontWeight: 400 }}>(top 8 avançam)</span></div>
+                  <div style={{ maxWidth: '460px' }}>
+                    {thirdsRank.map((r, i) => {
+                      const adv = i < 8;
+                      return (
+                        <div key={r.gn} style={{ display: 'grid', gridTemplateColumns: '22px 24px 1fr 24px 36px 28px', gap: '4px', alignItems: 'center', padding: '3px 6px', background: adv ? `${gn}0c` : `${rd}0c`, borderLeft: `2px solid ${adv ? gn : rd}`, borderRadius: '3px', marginBottom: '2px', fontSize: '11px', borderTop: i === 8 ? `2px dashed ${rd}66` : undefined }}>
+                          <span style={{ fontWeight: 700, color: adv ? gn : rd }}>{i + 1}</span>
+                          <span style={{ color: dm, fontSize: '9px' }}>3°{r.gn}</span>
+                          <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{fl(r.t)} {nm(r.t)} {!r.ready && <span style={{ fontSize: '8px', color: acc }} title="Grupo incompleto — provisório">prov.</span>}</span>
+                          <span style={{ textAlign: 'center', fontWeight: 700 }}>{r.pts}</span>
+                          <span style={{ textAlign: 'center', color: r.gd > 0 ? gn : r.gd < 0 ? rd : dm }}>{r.gd > 0 ? '+' : ''}{r.gd}</span>
+                          <span style={{ textAlign: 'center', color: dm }}>{r.gf}</span>
+                        </div>
+                      );
+                    })}
+                    <div style={{ fontSize: '8px', color: dm, marginTop: '4px' }}>Pts · SG · GM. {stt.allReady ? 'Todos os grupos resolvidos.' : 'Provisório — atualiza conforme os grupos fecham.'}</div>
+                  </div>
+
+                  {/* Bracket "as it stands" (determinístico, sem simular) */}
+                  <div style={{ fontSize: '12px', fontWeight: 700, color: bl, margin: '16px 0 6px' }}>🗺️ Chaveamento "as it stands" <span style={{ fontSize: '9px', color: dm, fontWeight: 400 }}>(só com as classificações atuais — sem simular)</span></div>
+                  {phOrder.map(ph => koByPhase[ph] && (
+                    <div key={ph} style={{ marginBottom: '8px' }}>
+                      <div style={{ fontSize: '10px', fontWeight: 700, color: gd, marginBottom: '3px' }}>{phLbl[ph]}</div>
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(230px,1fr))', gap: '4px' }}>
+                        {koByPhase[ph].map(m => (
+                          <div key={m.mn} style={{ display: 'flex', justifyContent: 'space-between', gap: '6px', background: card, border: `1px solid ${m.winner ? gn + '44' : bd}`, borderRadius: '4px', padding: '3px 7px', fontSize: '10px', opacity: m.h && m.a ? 1 : 0.55 }}>
+                            <span style={{ color: dm, fontSize: '8px', whiteSpace: 'nowrap' }}>M{m.mn} <span style={{ color: bl }}>{m.l}</span></span>
+                            <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', textAlign: 'right' }}>
+                              <span style={{ fontWeight: m.winner === m.h ? 700 : 400, color: m.winner === m.h ? gn : m.h ? tx : dm }}>{m.h ? nm(m.h) : '—'}</span>
+                              <span style={{ color: dm }}> × </span>
+                              <span style={{ fontWeight: m.winner === m.a ? 700 : 400, color: m.winner === m.a ? gn : m.a ? tx : dm }}>{m.a ? nm(m.a) : '—'}</span>
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
                 </div>
               );
             })()}
@@ -4535,7 +4693,7 @@ export default function WC2026() {
                           </div>
                         </div>
                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 70px 1fr', alignItems: 'center', gap: '4px' }}>
-                          <div style={{ textAlign: 'right', fontSize: '12px', fontWeight: 500 }}>{fl(m.home)} {nm(m.home)}</div>
+                          <div style={{ textAlign: 'right', fontSize: '12px', fontWeight: 500 }}>{fl(m.home)} {nm(m.home)}{(() => { const r = res?.[m.home]; const cl = r ? (r.g1 || 0) + (r.g2 || 0) + (r.g3a || 0) : null; return cl != null ? <div style={{ fontSize: '8px', color: dm, fontWeight: 400 }} title="Chance de classificação (MC vigente)">class. {clinch.grp[m.gn]?.cAdv[m.home] ? '✓' : cl.toFixed(0) + '%'}</div> : null; })()}</div>
                           <div style={{ display: 'flex', justifyContent: 'center', gap: '4px', alignItems: 'center' }}>
                             <input type="number" min="0" max="20" value={fx?.gA ?? ''} placeholder="-"
                               onChange={e => { const v = e.target.value; setUserRes(p => ({ ...p, [m.idx]: { ...p[m.idx], gA: v === '' ? undefined : +v } })); }}
@@ -4545,7 +4703,7 @@ export default function WC2026() {
                               onChange={e => { const v = e.target.value; setUserRes(p => ({ ...p, [m.idx]: { ...p[m.idx], gB: v === '' ? undefined : +v } })); }}
                               style={{ width: '32px', padding: '3px', textAlign: 'center', background: '#0d111d', color: tx, border: `1px solid ${bd}`, borderRadius: '4px', fontSize: '13px', fontWeight: 700 }} />
                           </div>
-                          <div style={{ fontSize: '12px', fontWeight: 500 }}>{fl(m.away)} {nm(m.away)}</div>
+                          <div style={{ fontSize: '12px', fontWeight: 500 }}>{fl(m.away)} {nm(m.away)}{(() => { const r = res?.[m.away]; const cl = r ? (r.g1 || 0) + (r.g2 || 0) + (r.g3a || 0) : null; return cl != null ? <div style={{ fontSize: '8px', color: dm, fontWeight: 400 }} title="Chance de classificação (MC vigente)">class. {clinch.grp[m.gn]?.cAdv[m.away] ? '✓' : cl.toFixed(0) + '%'}</div> : null; })()}</div>
                         </div>
                         {hasFx && (() => {
                           const s = surpriseOf(_eH, _eA, m.home, m.away, fx.gA, fx.gB);
