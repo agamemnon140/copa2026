@@ -405,6 +405,53 @@ const resolveKO = (standings, userRes) => {
   return out;
 };
 
+// Garantias matemáticas de um grupo por ENUMERAÇÃO dos resultados restantes (V/E/D de cada jogo
+// que falta). Classifica por pontos → confronto direto (1º critério FIFA); empates que só o saldo
+// resolveria são tratados de forma adversa (pior posição). Retorna por time { first, adv, out }.
+// games = [{ h, a, res:'H'|'D'|'A'|null }]. Trata acoplamento (jogos compartilhados) e H2H corretamente.
+const groupClinch = (teams, games) => {
+  const out = {}; teams.forEach(t => out[t] = { first: true, adv: true, out: true });
+  const remaining = games.filter(g => !g.res), fixed = games.filter(g => g.res);
+  const R = remaining.length;
+  if (R > 8) return {}; // proteção (nunca >6 num grupo de 4)
+  const codes = ['H', 'D', 'A'], total = Math.pow(3, R);
+  for (let mask = 0; mask < total; mask++) {
+    const pts = {}, h2h = {};
+    teams.forEach(t => { pts[t] = 0; h2h[t] = {}; });
+    const apply = (h, a, res) => {
+      if (res === 'H') { pts[h] += 3; h2h[h][a] = (h2h[h][a] || 0) + 3; }
+      else if (res === 'A') { pts[a] += 3; h2h[a][h] = (h2h[a][h] || 0) + 3; }
+      else { pts[h] += 1; pts[a] += 1; h2h[h][a] = (h2h[h][a] || 0) + 1; h2h[a][h] = (h2h[a][h] || 0) + 1; }
+    };
+    fixed.forEach(g => apply(g.h, g.a, g.res));
+    let m = mask;
+    remaining.forEach(g => { apply(g.h, g.a, codes[m % 3]); m = Math.floor(m / 3); });
+    const sorted = teams.slice().sort((x, y) => pts[y] - pts[x]);
+    const worst = {}, best = {};
+    let i = 0;
+    while (i < sorted.length) {
+      let j = i; while (j < sorted.length && pts[sorted[j]] === pts[sorted[i]]) j++;
+      const block = sorted.slice(i, j); // empatados em pontos → desempata por pontos do confronto direto entre eles
+      const h2hp = {}; block.forEach(t => { h2hp[t] = block.reduce((s, o) => s + (o === t ? 0 : (h2h[t][o] || 0)), 0); });
+      block.forEach(t => best[t] = i + 1); // melhor caso: topo do bloco
+      const bs = block.slice().sort((x, y) => h2hp[y] - h2hp[x]);
+      let bi = 0;
+      while (bi < bs.length) {
+        let bj = bi; while (bj < bs.length && h2hp[bs[bj]] === h2hp[bs[bi]]) bj++;
+        bs.slice(bi, bj).forEach(t => worst[t] = i + bj); // sub-empate (mesmos pts e H2H) → pior posição (1-based)
+        bi = bj;
+      }
+      i = j;
+    }
+    teams.forEach(t => {
+      if (worst[t] !== 1) out[t].first = false;
+      if (worst[t] > 2) out[t].adv = false;
+      if (best[t] < 3) out[t].out = false;
+    });
+  }
+  return out;
+};
+
 // ── Desempate oficial FIFA (anexos) ───────────────────────────────────────────
 // Step 1: confronto direto entre os empatados (pontos H2H → saldo H2H → gols H2H)
 // Step 2: saldo geral → gols geral  (conduta/cartões: não simulável, pulado)
@@ -1048,7 +1095,7 @@ const lsSave = (key, value) => {
 // COMPONENT
 // ============================================================================
 export default function WC2026() {
-  const [tab, setTab] = useState('groups');
+  const [tab, setTab] = useState('probs'); // abre direto na aba Probs (probsView padrão = 'bracket')
   const [nSim, setNSim] = useState(() => lsLoad('nSim', 10000));
   const [running, setRunning] = useState(false);
   const [mcProg, setMcProg] = useState(null); // % do MC em blocos (null = parado)
@@ -1200,6 +1247,14 @@ export default function WC2026() {
   const maybeBaseline = () => { const mk = modelKey(); if (baseKeyRef.current !== mk) { baseKeyRef.current = mk; computeBaseline(); } };
   // Agenda trabalho pesado para DEPOIS da primeira pintura (não trava a tela após o run).
   const afterPaint = (fn) => { requestAnimationFrame(() => { if (typeof window.requestIdleCallback === 'function') window.requestIdleCallback(fn, { timeout: 800 }); else setTimeout(fn, 300); }); };
+  // Persiste a última simulação (agregado curado: sem pool/all/matchByG3) p/ restaurar ao abrir.
+  const persistSession = (r, runKey) => {
+    const save = (k, o) => { try { window.localStorage.setItem('wc2026_' + k, JSON.stringify(o)); return true; } catch (e) { return false; } };
+    const { pool, all, matchByG3, ...curated } = r;
+    if (!save('lastAgg', curated)) { const { tpc, gsShift, koShift, duelPos, ...lighter } = curated; save('lastAgg', lighter); } // cai p/ versão mais leve se estourar a cota
+    save('lastMeta', { nAccepted: r.nAccepted, n: r.n, conds: conditions, appliedKey: runKey, modelKey: modelKey() });
+    if (baseAgg) save('lastBase', baseAgg);
+  };
   const doMC = () => {
     const runKey = urKey(userRes); // resultados que ESTE MC vai incorporar
     if (running) return; // já rodando (efeitos automáticos não cancelam nem empilham)
@@ -1233,7 +1288,7 @@ export default function WC2026() {
             setRunning(false); setMcProg(null); setTab('probs');
             // Baseline pré-Copa (Δ) só DEPOIS da tela pintar — evita a lentidão pós-run.
             // A Evolução NÃO roda aqui: é calculada sob demanda por botão na própria aba.
-            afterPaint(maybeBaseline);
+            afterPaint(() => { maybeBaseline(); persistSession(r, runKey); });
           } catch (err) { setRunning(false); setMcProg(null); setMcErr('Falha ao agregar a simulação: ' + (err?.message || err)); }
         }, 0);
       } catch (err) {
@@ -1708,6 +1763,21 @@ export default function WC2026() {
   const didRun = useRef(false);
   // Não roda o MC automaticamente ao abrir — o usuário inicia com o ▶ (evita travar na abertura).
   // didRun passa a true dentro do doMC, então as trocas de modelo seguem re-rodando após a 1ª simulação.
+  // Restaura a ÚLTIMA simulação salva (se houver) ao abrir — abre direto no bracket já populado.
+  const restoredRef = useRef(false);
+  useEffect(() => {
+    if (restoredRef.current) return; restoredRef.current = true;
+    try {
+      const agg = lsLoad('lastAgg', null);
+      if (agg && agg.p) {
+        applyAgg(agg);
+        const meta = lsLoad('lastMeta', null);
+        if (meta) { setMcMeta({ nAccepted: meta.nAccepted, n: meta.n, conds: meta.conds }); if (meta.appliedKey != null) setAppliedKey(meta.appliedKey); }
+        const base = lsLoad('lastBase', null); if (base && base.p) { setBaseAgg(base); baseKeyRef.current = (meta && meta.modelKey) || null; }
+        didRun.current = true; // já houve simulação → trocas de modelo voltam a re-rodar
+      }
+    } catch (e) { /* sessão corrompida: ignora */ }
+  }, []);
   // Auto-rerun when rating system changes
   const prevRSys = useRef(rSys);
   useEffect(() => { if (prevRSys.current !== rSys) { prevRSys.current = rSys; doMC(); } }, [rSys]);
@@ -1835,29 +1905,28 @@ export default function WC2026() {
     const ko = resolveKO(st, userRes);
     const grp = {};
     Object.entries(groups).forEach(([gn, ts]) => {
-      const played = {}, pts = {};
-      ts.forEach(t => { played[t] = 0; pts[t] = 0; });
+      const games = [];
       GS.forEach(([g, hi, ai], idx) => {
-        if (g !== gn) return; const fx = userRes[idx]; if (fx?.gA == null || fx?.gB == null) return;
-        const h = ts[hi], a = ts[ai]; played[h]++; played[a]++;
-        if (fx.gA > fx.gB) pts[h] += 3; else if (fx.gA < fx.gB) pts[a] += 3; else { pts[h]++; pts[a]++; }
+        if (g !== gn) return; const fx = userRes[idx];
+        const res = (fx?.gA != null && fx?.gB != null) ? (fx.gA > fx.gB ? 'H' : fx.gA < fx.gB ? 'A' : 'D') : null;
+        games.push({ h: ts[hi], a: ts[ai], res });
       });
-      const min = {}, max = {}, c1 = {}, cAdv = {}, exact = {};
-      ts.forEach(t => { min[t] = pts[t]; max[t] = pts[t] + 3 * (3 - played[t]); });
+      const gc = groupClinch(ts, games); // { time: {first, adv, out} } por enumeração (confronto direto)
       const ready = st.groupReady[gn];
       const sorted = ready ? (st.st[gn]?.sorted || []) : null;
-      ts.forEach(t => {
-        c1[t] = ts.every(r => r === t || min[t] > max[r]); // 1º garantido (não pode nem empatar em pts)
-        cAdv[t] = ts.filter(r => r !== t && max[r] >= min[t]).length <= 1; // top-2 garantido
-        exact[t] = sorted ? (sorted.indexOf(t) + 1) || null : null; // posição exata quando o grupo fechou
-      });
-      grp[gn] = { c1, cAdv, exact, ready };
+      const exact = {};
+      ts.forEach(t => { exact[t] = sorted ? (sorted.indexOf(t) + 1) || null : null; }); // posição exata quando o grupo fechou
+      grp[gn] = { gc, exact, ready };
     });
     const PHASE = { r16: 'R16', qf: 'QF', sf: 'SF', fin: 'FIN', ch: 'FIN' };
     const reached = (t, roundKey) => { const ph = PHASE[roundKey]; if (!ph) return false; for (let mn = 73; mn <= 104; mn++) { const m = ko[mn]; if (m && m.ph === ph && (m.h === t || m.a === t)) return true; } return false; };
     return { st, ko, grp,
-      // posição exata confirmada (1º/2º/3º/4º) do time t no seu grupo
-      confPos: (gn, t, pos) => { const G = grp[gn]; if (!G) return false; if (G.exact[t]) return G.exact[t] === pos; return pos === 1 && G.c1[t]; },
+      // posição exata confirmada (1º/2º/3º/4º): grupo fechado, ou 1º garantido por confronto direto
+      confPos: (gn, t, pos) => { const G = grp[gn]; if (!G) return false; if (G.exact[t]) return G.exact[t] === pos; return pos === 1 && !!G.gc[t]?.first; },
+      // vaga garantida (top-2) — via enumeração com confronto direto
+      confAdv: (gn, t) => !!grp[gn]?.gc[t]?.adv,
+      // 1º garantido (via enumeração com confronto direto)
+      confFirst: (gn, t) => !!grp[gn]?.gc[t]?.first,
       // time t joga deterministicamente a partida mn (slot resolvido)
       confPlay: (t, mn) => { const m = ko[mn]; return !!(m && (m.h === t || m.a === t)); },
       // time t alcançou deterministicamente a fase roundKey (r16/qf/sf/fin/ch)
@@ -2130,7 +2199,7 @@ export default function WC2026() {
                 <tr key={r.t} style={{ background: i < 3 ? `${gd}08` : i % 2 === 0 ? 'transparent' : '#0d111d' }}>
                   <td style={{ padding: '4px 3px', textAlign: 'right', color: dm, fontSize: '10px' }}>{i + 1}</td>
                   <td style={{ padding: '4px 3px', fontWeight: 600, whiteSpace: 'nowrap' }}>{fl(r.t)} {nm(r.t)}</td>
-                  <td style={{ padding: '4px 3px', textAlign: 'right', color: dm, fontSize: '10px' }}>{rt(r.t)}</td>
+                  <td style={{ padding: '4px 3px', textAlign: 'right', color: dm, fontSize: '10px' }}>{Math.round(rt(r.t))}</td>
                   <td style={{ padding: '4px 3px', textAlign: 'right' }}>
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '2px' }}>
                       <div style={{ height: '12px', width: `${Math.min(r.ch * 4, 100)}px`, background: i === 0 ? gd : i < 3 ? '#9ca3af' : acc, borderRadius: '2px', minWidth: r.ch > 0 ? '3px' : '0' }} />
@@ -2294,7 +2363,7 @@ export default function WC2026() {
                       const adv = p <= 2 || (p === 3 && isTop8);
                       return <div key={pk} style={{ display:'flex', justifyContent:'space-between', padding:'1px 4px', fontSize:'9px', borderLeft: adv ? '2px solid #22c55e' : p === 3 ? '2px solid #ef4444' : '2px solid transparent' }}>
                         <span style={{ color: adv ? tx : dm, fontWeight: p===1 ? 600 : 400 }}>
-                          <span style={{ fontSize:'7px', color: adv ? '#22c55e' : p===4 ? '#ef4444' : '#ef4444', marginRight:'2px' }}>{pk}</span>{t ? `${fl(t)}${nm(t)}` : '?'}
+                          <span style={{ fontSize:'7px', color: adv ? '#22c55e' : p===4 ? '#ef4444' : '#ef4444', marginRight:'2px' }}>{pk}</span>{!probsOrig && t && clinch.confAdv(gn, t) && <span title="Classificação garantida" style={{ color:'#22c55e', fontWeight:700, marginRight:'2px' }}>✓</span>}{t ? `${fl(t)}${nm(t)}` : '?'}
                         </span>
                         <span style={{ fontSize:'8px', color: pct > 60 ? '#22c55e' : pct > 30 ? acc : dm }}>{!probsOrig && t && clinch.confPos(gn, t, p) ? '✓' : pct.toFixed(0)+'%'}</span>
                       </div>;
@@ -2520,7 +2589,7 @@ export default function WC2026() {
                                   const pct = c / mcN * 100;
                                   return (
                                     <div key={t} style={{ display: 'grid', gridTemplateColumns: '1fr 40px', gap: '4px', alignItems: 'center', fontSize: '10px', padding: '1px 0' }}>
-                                      <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: pct > 50 ? tx : dm }}>{fl(t)} {nm(t)}</span>
+                                      <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: pct > 50 ? tx : dm }}>{!probsOrig && clinch.confAdv(gName, t) && <span title="Classificação garantida" style={{ color: gn, fontWeight: 700, marginRight: '2px' }}>✓</span>}{fl(t)} {nm(t)}</span>
                                       <span style={{ textAlign: 'right', fontWeight: 600, color: pct > 50 ? gn : pct > 20 ? acc : dm }}>{!probsOrig && clinch.confPos(gName, t, p) ? '✓' : <>{pct.toFixed(1)}%{dTag(pct, basePos(t))}</>}</span>
                                     </div>
                                   );
@@ -3720,7 +3789,7 @@ export default function WC2026() {
                   {all.sort((a, b) => rt(b) - rt(a)).map(t => <option key={t} value={t}>{fl(t)} {nm(t)}</option>)}
                 </select>
                 <button onClick={() => setConfKO(v => !v)} style={{ padding: '5px 10px', fontSize: '11px', fontWeight: 700, background: confKO ? `${acc}33` : card, color: confKO ? acc : dm, border: `1px solid ${confKO ? acc : bd}`, borderRadius: '5px', cursor: 'pointer' }} title="Alterna a análise do confronto entre jogo normal e mata-mata (prorrogação + pênaltis)">{confKO ? '🥊 Mata-mata' : '⚽ Jogo normal'}</button>
-                <span style={{ fontSize: '9px', color: dm }}>ΔElo {rtBase(confA) - rtBase(confB) >= 0 ? '+' : ''}{rtBase(confA) - rtBase(confB)}</span>
+                <span style={{ fontSize: '9px', color: dm }}>ΔElo {rtBase(confA) - rtBase(confB) >= 0 ? '+' : ''}{Math.round(rtBase(confA) - rtBase(confB))}</span>
               </div>
               {confA === confB ? <div style={{ color: dm, fontSize: '11px' }}>Selecione dois times diferentes.</div> : (() => {
                 const k1 = [confA, confB].sort().join('|');
@@ -3757,7 +3826,7 @@ export default function WC2026() {
                       <div style={{ textAlign: 'center', flex: 1 }}>
                         <div style={{ fontSize: '20px' }}>{fl(confA)}</div>
                         <div style={{ fontSize: '12px', fontWeight: 700 }}>{nm(confA)}</div>
-                        <div style={{ fontSize: '10px', color: dm }}>{rt(confA)} pts • Grupo {grpA}</div>
+                        <div style={{ fontSize: '10px', color: dm }}>{Math.round(rt(confA))} pts • Grupo {grpA}</div>
                       </div>
                       <div style={{ textAlign: 'center', padding: '0 10px' }}>
                         <div style={{ fontSize: '9px', color: dm }}>Se se enfrentarem</div>
@@ -3766,7 +3835,7 @@ export default function WC2026() {
                       <div style={{ textAlign: 'center', flex: 1 }}>
                         <div style={{ fontSize: '20px' }}>{fl(confB)}</div>
                         <div style={{ fontSize: '12px', fontWeight: 700 }}>{nm(confB)}</div>
-                        <div style={{ fontSize: '10px', color: dm }}>{rt(confB)} pts • Grupo {grpB}</div>
+                        <div style={{ fontSize: '10px', color: dm }}>{Math.round(rt(confB))} pts • Grupo {grpB}</div>
                       </div>
                     </div>
 
@@ -4412,8 +4481,25 @@ export default function WC2026() {
                 const t = sorted[2];
                 return { gn, t, pts: tb[t].pts, gd: tb[t].gd, gf: tb[t].gf, played: tb[t].p, ready: stt.groupReady[gn] };
               }).sort((a, b) => b.pts - a.pts || b.gd - a.gd || b.gf - a.gf);
-              // Bracket "as it stands" — determinístico das classificações atuais (sem simular).
-              const koNow = resolveKO(stt, userRes);
+              // Bracket "as it stands" — popula com as classificações ATUAIS (provisórias), sem simular.
+              // Força 1º/2º de todos os grupos pela ordem corrente; 3ºs pelo ranking atual (top 8 + Anexo C).
+              const sd = g => stt.st[g]?.sorted || [];
+              const provThirds = Object.keys(groups).map(g => ({ g, t: sd(g)[2] })).filter(x => x.t)
+                .sort((a, b) => tb[b.t].pts - tb[a.t].pts || tb[b.t].gd - tb[a.t].gd || tb[b.t].gf - tb[a.t].gf);
+              const prov8 = provThirds.slice(0, 8);
+              const provB8g = prov8.map(x => x.g).sort();
+              const provStandings = {
+                groupReady: Object.fromEntries(Object.keys(groups).map(g => [g, true])),
+                allReady: provThirds.length === Object.keys(groups).length,
+                F: Object.fromEntries(Object.keys(groups).map(g => [g, sd(g)[0]])),
+                S: Object.fromEntries(Object.keys(groups).map(g => [g, sd(g)[1]])),
+                b8m: Object.fromEntries(prov8.map(x => [x.g, x.t])),
+                asgn: provB8g.length === 8 ? solve3rd(provB8g) : {},
+                tb, st: stt.st,
+              };
+              const koNow = resolveKO(provStandings, userRes);
+              const gOf = {}; Object.entries(groups).forEach(([g, ts]) => ts.forEach(t => { gOf[t] = g; }));
+              const isProv = t => t && !stt.groupReady[gOf[t]]; // time de grupo ainda incompleto
               const phOrder = ['R32', 'R16', 'QF', 'SF', '3°', 'FIN'];
               const phLbl = { R32: 'R32', R16: 'Oitavas', QF: 'Quartas', SF: 'Semis', '3°': '3º lugar', FIN: 'Final' };
               const koByPhase = {}; for (let mn = 73; mn <= 104; mn++) { const m = koNow[mn]; (koByPhase[m.ph] = koByPhase[m.ph] || []).push(m); }
@@ -4462,7 +4548,7 @@ export default function WC2026() {
                   </div>
 
                   {/* Bracket "as it stands" (determinístico, sem simular) */}
-                  <div style={{ fontSize: '12px', fontWeight: 700, color: bl, margin: '16px 0 6px' }}>🗺️ Chaveamento "as it stands" <span style={{ fontSize: '9px', color: dm, fontWeight: 400 }}>(só com as classificações atuais — sem simular)</span></div>
+                  <div style={{ fontSize: '12px', fontWeight: 700, color: bl, margin: '16px 0 6px' }}>🗺️ Chaveamento "as it stands" <span style={{ fontSize: '9px', color: dm, fontWeight: 400 }}>(classificações atuais, sem simular — <em>itálico*</em> = provisório, grupo incompleto)</span></div>
                   {phOrder.map(ph => koByPhase[ph] && (
                     <div key={ph} style={{ marginBottom: '8px' }}>
                       <div style={{ fontSize: '10px', fontWeight: 700, color: gd, marginBottom: '3px' }}>{phLbl[ph]}</div>
@@ -4471,9 +4557,9 @@ export default function WC2026() {
                           <div key={m.mn} style={{ display: 'flex', justifyContent: 'space-between', gap: '6px', background: card, border: `1px solid ${m.winner ? gn + '44' : bd}`, borderRadius: '4px', padding: '3px 7px', fontSize: '10px', opacity: m.h && m.a ? 1 : 0.55 }}>
                             <span style={{ color: dm, fontSize: '8px', whiteSpace: 'nowrap' }}>M{m.mn} <span style={{ color: bl }}>{m.l}</span></span>
                             <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', textAlign: 'right' }}>
-                              <span style={{ fontWeight: m.winner === m.h ? 700 : 400, color: m.winner === m.h ? gn : m.h ? tx : dm }}>{m.h ? nm(m.h) : '—'}</span>
+                              <span title={isProv(m.h) ? 'provisório (grupo incompleto)' : undefined} style={{ fontWeight: m.winner === m.h ? 700 : 400, fontStyle: isProv(m.h) ? 'italic' : 'normal', color: m.winner === m.h ? gn : m.h ? (isProv(m.h) ? dm : tx) : dm }}>{m.h ? nm(m.h) : '—'}{isProv(m.h) ? '*' : ''}</span>
                               <span style={{ color: dm }}> × </span>
-                              <span style={{ fontWeight: m.winner === m.a ? 700 : 400, color: m.winner === m.a ? gn : m.a ? tx : dm }}>{m.a ? nm(m.a) : '—'}</span>
+                              <span title={isProv(m.a) ? 'provisório (grupo incompleto)' : undefined} style={{ fontWeight: m.winner === m.a ? 700 : 400, fontStyle: isProv(m.a) ? 'italic' : 'normal', color: m.winner === m.a ? gn : m.a ? (isProv(m.a) ? dm : tx) : dm }}>{m.a ? nm(m.a) : '—'}{isProv(m.a) ? '*' : ''}</span>
                             </span>
                           </div>
                         ))}
@@ -4693,7 +4779,7 @@ export default function WC2026() {
                           </div>
                         </div>
                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 70px 1fr', alignItems: 'center', gap: '4px' }}>
-                          <div style={{ textAlign: 'right', fontSize: '12px', fontWeight: 500 }}>{fl(m.home)} {nm(m.home)}{(() => { const r = res?.[m.home]; const cl = r ? (r.g1 || 0) + (r.g2 || 0) + (r.g3a || 0) : null; return cl != null ? <div style={{ fontSize: '8px', color: dm, fontWeight: 400 }} title="Chance de classificação (MC vigente)">class. {clinch.grp[m.gn]?.cAdv[m.home] ? '✓' : cl.toFixed(0) + '%'}</div> : null; })()}</div>
+                          <div style={{ textAlign: 'right', fontSize: '12px', fontWeight: 500 }}>{fl(m.home)} {nm(m.home)}{(() => { const r = res?.[m.home]; const cl = r ? (r.g1 || 0) + (r.g2 || 0) + (r.g3a || 0) : null; return cl != null ? <div style={{ fontSize: '8px', color: dm, fontWeight: 400 }} title="Chance de classificação (MC vigente)">class. {clinch.confAdv(m.gn, m.home) ? '✓' : cl.toFixed(0) + '%'}</div> : null; })()}</div>
                           <div style={{ display: 'flex', justifyContent: 'center', gap: '4px', alignItems: 'center' }}>
                             <input type="number" min="0" max="20" value={fx?.gA ?? ''} placeholder="-"
                               onChange={e => { const v = e.target.value; setUserRes(p => ({ ...p, [m.idx]: { ...p[m.idx], gA: v === '' ? undefined : +v } })); }}
@@ -4703,7 +4789,7 @@ export default function WC2026() {
                               onChange={e => { const v = e.target.value; setUserRes(p => ({ ...p, [m.idx]: { ...p[m.idx], gB: v === '' ? undefined : +v } })); }}
                               style={{ width: '32px', padding: '3px', textAlign: 'center', background: '#0d111d', color: tx, border: `1px solid ${bd}`, borderRadius: '4px', fontSize: '13px', fontWeight: 700 }} />
                           </div>
-                          <div style={{ fontSize: '12px', fontWeight: 500 }}>{fl(m.away)} {nm(m.away)}{(() => { const r = res?.[m.away]; const cl = r ? (r.g1 || 0) + (r.g2 || 0) + (r.g3a || 0) : null; return cl != null ? <div style={{ fontSize: '8px', color: dm, fontWeight: 400 }} title="Chance de classificação (MC vigente)">class. {clinch.grp[m.gn]?.cAdv[m.away] ? '✓' : cl.toFixed(0) + '%'}</div> : null; })()}</div>
+                          <div style={{ fontSize: '12px', fontWeight: 500 }}>{fl(m.away)} {nm(m.away)}{(() => { const r = res?.[m.away]; const cl = r ? (r.g1 || 0) + (r.g2 || 0) + (r.g3a || 0) : null; return cl != null ? <div style={{ fontSize: '8px', color: dm, fontWeight: 400 }} title="Chance de classificação (MC vigente)">class. {clinch.confAdv(m.gn, m.away) ? '✓' : cl.toFixed(0) + '%'}</div> : null; })()}</div>
                         </div>
                         {hasFx && (() => {
                           const s = surpriseOf(_eH, _eA, m.home, m.away, fx.gA, fx.gB);
