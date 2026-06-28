@@ -1,16 +1,25 @@
 # Notas para agentes (Claude Code)
 
-## ⚠️ SEMPRE `git fetch` antes de começar
+## ⚠️ SEMPRE sincronizar antes de começar
 Este repositório é desenvolvido em **2 máquinas**. O checkout local **frequentemente está
-atrás** do remoto. Antes de qualquer trabalho:
+atrás** do remoto. Antes de qualquer trabalho, **por padrão faça o pull**:
+
+```bash
+git pull --ff-only                    # default: traz e aplica (só fast-forward, seguro)
+```
+
+Se quiser **inspecionar antes de aplicar** (recomendado para um agente, ou quando há mudanças
+locais não commitadas), use o fetch e compare primeiro:
 
 ```bash
 git fetch origin
-git log --oneline HEAD..origin/main   # se vier algo, o local está atrasado
-git pull --ff-only                    # sincronizar antes de editar
+git log --oneline HEAD..origin/main   # o que tem de novo no remoto
+git diff HEAD origin/main             # o que mudaria
+git pull --ff-only                    # então aplica
 ```
 
-Trabalhar sem isso já causou explorar/editar código morto.
+`git fetch` só baixa/atualiza as refs (não toca nos seus arquivos); `git pull` = `fetch` + `merge`
+(aplica no working tree). Trabalhar sem sincronizar já causou explorar/editar código morto.
 
 ## Fonte de verdade × build
 - **`simulador_copa_2026.jsx`** é a FONTE (React, componente `WC2026`). É o que se edita.

@@ -1265,6 +1265,7 @@ export default function WC2026() {
   const [preOpen, setPreOpen] = useState(null); // idx do jogo GS (ainda sem placar) com o "E se?" pré-jogo aberto
   const [bracketSel, setBracketSel] = useState(null); // {type:'match',mn} | {type:'group',gn} | null — painel de detalhe do bracket
   const [brLayout, setBrLayout] = useState(() => lsLoad('brLayout', 'sides')); // 'sides' (chaveamento 2 lados) | 'pathways' (antigo, backup)
+  const [dynEloOpen, setDynEloOpen] = useState(false); // expandir tabela completa do Elo dinâmico (todos os times)
   const [selCombo, setSelCombo] = useState(null); // combinação de 3ºs fixada manualmente (null = automática, a mais provável)
   const [surSort, setSurSort] = useState('bits'); // ordenação da aba Surpresas: 'bits' | 'impact'
   const [surModels, setSurModels] = useState(false); // mostra a comparação de modelos (backtest) dentro da aba Surpresas
@@ -2238,12 +2239,35 @@ export default function WC2026() {
         <button onClick={() => setMcErr(null)} style={{ background: 'transparent', border: 'none', color: rd, cursor: 'pointer', fontSize: '13px', lineHeight: 1, padding: 0 }}>✕</button>
       </div>}
       {dynElo && res && (() => {
-        const movers = Object.entries(_dynAdj).filter(([, v]) => Math.abs(v) >= 0.5).sort((a, b) => Math.abs(b[1]) - Math.abs(a[1])).slice(0, 8);
+        const adjAll = all.map(t => { const base = rtRaw(t), d = _dynAdj[t] || 0; return { t, base, d, now: base + d }; });
+        const movers = adjAll.filter(x => Math.abs(x.d) >= 0.5).sort((a, b) => Math.abs(b.d) - Math.abs(a.d));
         if (!movers.length) return null;
+        const top = movers.slice(0, 8);
+        const ranked = adjAll.slice().sort((a, b) => b.now - a.now);
+        const cols = '26px 1fr 56px 50px 56px';
         return (
-          <div style={{ margin: '0 10px 6px', padding: '5px 10px', fontSize: '10px', color: dm, background: `${bl}10`, border: `1px solid ${bl}33`, borderRadius: '5px', display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }} title={`Ajuste dinâmico de Elo (eloratings.net: K=${DYN_K} + saldo de gols + mando) aplicado sobre o rating base a partir dos resultados de grupo já disputados. Afeta só os jogos ainda não simulados.`}>
-            <span style={{ color: bl, fontWeight: 700 }}>📈 Elo dinâmico:</span>
-            {movers.map(([t, v]) => <span key={t} style={{ whiteSpace: 'nowrap' }}>{fl(t)} {nm(t)} <strong style={{ color: v > 0 ? gn : rd }}>{v > 0 ? '+' : ''}{Math.round(v)}</strong></span>)}
+          <div style={{ margin: '0 10px 6px' }}>
+            <div onClick={() => setDynEloOpen(o => !o)} title={`Ajuste dinâmico de Elo (eloratings.net: K=${DYN_K} + saldo de gols + mando) a partir dos resultados de grupo já disputados. Afeta só os jogos ainda não simulados. Clique para ver todos os times.`} style={{ padding: '5px 10px', fontSize: '10px', color: dm, background: `${bl}10`, border: `1px solid ${bl}33`, borderRadius: dynEloOpen ? '5px 5px 0 0' : '5px', display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', cursor: 'pointer' }}>
+              <span style={{ color: bl, fontWeight: 700 }}>📈 Elo dinâmico:</span>
+              {top.map(x => <span key={x.t} style={{ whiteSpace: 'nowrap' }}>{fl(x.t)} {nm(x.t)} <strong style={{ color: x.d > 0 ? gn : rd }}>{x.d > 0 ? '+' : ''}{Math.round(x.d)}</strong></span>)}
+              <span style={{ marginLeft: 'auto', color: bl, fontWeight: 700, whiteSpace: 'nowrap' }}>{dynEloOpen ? '▴ fechar' : `▾ ver todos (${ranked.length})`}</span>
+            </div>
+            {dynEloOpen && (
+              <div style={{ border: `1px solid ${bl}33`, borderTop: 'none', borderRadius: '0 0 5px 5px', background: '#0d111d', padding: '4px 8px 6px', maxHeight: '340px', overflowY: 'auto' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: cols, gap: '4px 8px', fontSize: '9px', color: dm, fontWeight: 700, borderBottom: `1px solid ${bd}`, padding: '3px 0', marginBottom: '2px', position: 'sticky', top: 0, background: '#0d111d' }}>
+                  <span>#</span><span>Seleção</span><span style={{ textAlign: 'right' }}>Elo início</span><span style={{ textAlign: 'right' }}>Δ</span><span style={{ textAlign: 'right' }}>Elo agora</span>
+                </div>
+                {ranked.map((x, i) => (
+                  <div key={x.t} style={{ display: 'grid', gridTemplateColumns: cols, gap: '4px 8px', fontSize: '10px', alignItems: 'center', padding: '1px 0', background: i % 2 ? 'transparent' : `${bl}06` }}>
+                    <span style={{ color: dm }}>{i + 1}</span>
+                    <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{fl(x.t)} {nm(x.t)}</span>
+                    <span style={{ textAlign: 'right', color: dm }}>{Math.round(x.base)}</span>
+                    <span style={{ textAlign: 'right', fontWeight: 700, color: x.d > 0.5 ? gn : x.d < -0.5 ? rd : dm }}>{x.d > 0 ? '+' : ''}{Math.round(x.d)}</span>
+                    <span style={{ textAlign: 'right', fontWeight: 700, color: acc }}>{Math.round(x.now)}</span>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         );
       })()}
