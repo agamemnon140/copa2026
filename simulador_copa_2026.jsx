@@ -74,7 +74,80 @@ let _ME = 1.32;
 // Exemplo: 1: {gA: 1, gB: 0},  // México 1-0 África do Sul
 // Exemplo: 'k73': {gA: 1, gB: 1, pw: 'B'},  // empate em 90', visitante venceu nos pênaltis
 const BUILT_IN_RESULTS = {
-  // (preencher aqui conforme a Copa começar)
+  // Fase de grupos (oficiais, Wikipedia — Copa 2026). gA = mandante (lado hi do GS), gB = visitante (lado ai).
+  1:{gA:2,gB:0},   // A  México 2-0 África do Sul
+  2:{gA:2,gB:1},   // A  Coreia do Sul 2-1 Tchéquia
+  3:{gA:1,gB:1},   // B  Canadá 1-1 Bósnia
+  4:{gA:4,gB:1},   // D  EUA 4-1 Paraguai
+  5:{gA:2,gB:0},   // D  Austrália 2-0 Turquia
+  6:{gA:1,gB:1},   // B  Catar 1-1 Suíça
+  7:{gA:1,gB:1},   // C  Brasil 1-1 Marrocos
+  8:{gA:0,gB:1},   // C  Haiti 0-1 Escócia
+  9:{gA:7,gB:1},   // E  Alemanha 7-1 Curaçao
+  10:{gA:2,gB:2},  // F  Holanda 2-2 Japão
+  11:{gA:1,gB:0},  // E  Costa do Marfim 1-0 Equador
+  12:{gA:5,gB:1},  // F  Suécia 5-1 Tunísia
+  13:{gA:0,gB:0},  // H  Espanha 0-0 Cabo Verde
+  14:{gA:1,gB:1},  // G  Bélgica 1-1 Egito
+  15:{gA:1,gB:1},  // H  Arábia Saudita 1-1 Uruguai
+  16:{gA:2,gB:2},  // G  Irã 2-2 Nova Zelândia
+  17:{gA:3,gB:0},  // J  Argentina 3-0 Argélia
+  18:{gA:3,gB:1},  // I  França 3-1 Senegal
+  19:{gA:1,gB:4},  // I  Iraque 1-4 Noruega
+  20:{gA:3,gB:1},  // J  Áustria 3-1 Jordânia
+  21:{gA:1,gB:1},  // K  Portugal 1-1 RD Congo
+  22:{gA:4,gB:2},  // L  Inglaterra 4-2 Croácia
+  23:{gA:1,gB:0},  // L  Gana 1-0 Panamá
+  24:{gA:1,gB:3},  // K  Uzbequistão 1-3 Colômbia
+  25:{gA:1,gB:1},  // A  Tchéquia 1-1 África do Sul
+  26:{gA:4,gB:1},  // B  Suíça 4-1 Bósnia
+  27:{gA:6,gB:0},  // B  Canadá 6-0 Catar
+  28:{gA:1,gB:0},  // A  México 1-0 Coreia do Sul
+  29:{gA:0,gB:1},  // D  Turquia 0-1 Paraguai
+  30:{gA:2,gB:0},  // D  EUA 2-0 Austrália
+  31:{gA:0,gB:1},  // C  Escócia 0-1 Marrocos
+  32:{gA:3,gB:0},  // C  Brasil 3-0 Haiti
+  33:{gA:5,gB:1},  // F  Holanda 5-1 Suécia
+  34:{gA:2,gB:1},  // E  Alemanha 2-1 Costa do Marfim
+  35:{gA:0,gB:0},  // E  Equador 0-0 Curaçao
+  36:{gA:0,gB:4},  // F  Tunísia 0-4 Japão
+  37:{gA:4,gB:0},  // H  Espanha 4-0 Arábia Saudita
+  38:{gA:0,gB:0},  // G  Bélgica 0-0 Irã
+  39:{gA:2,gB:2},  // H  Uruguai 2-2 Cabo Verde
+  40:{gA:1,gB:3},  // G  Nova Zelândia 1-3 Egito
+  41:{gA:2,gB:0},  // J  Argentina 2-0 Áustria
+  42:{gA:3,gB:0},  // I  França 3-0 Iraque
+  43:{gA:3,gB:2},  // I  Noruega 3-2 Senegal
+  44:{gA:1,gB:2},  // J  Jordânia 1-2 Argélia
+  45:{gA:5,gB:0},  // K  Portugal 5-0 Uzbequistão
+  46:{gA:0,gB:0},  // L  Inglaterra 0-0 Gana
+  47:{gA:0,gB:1},  // L  Panamá 0-1 Croácia
+  48:{gA:1,gB:0},  // K  Colômbia 1-0 RD Congo
+  49:{gA:2,gB:1},  // B  Suíça 2-1 Canadá
+  50:{gA:3,gB:1},  // B  Bósnia 3-1 Catar
+  51:{gA:0,gB:3},  // C  Escócia 0-3 Brasil
+  52:{gA:4,gB:2},  // C  Marrocos 4-2 Haiti
+  53:{gA:0,gB:3},  // A  Tchéquia 0-3 México
+  54:{gA:1,gB:0},  // A  África do Sul 1-0 Coreia do Sul
+  55:{gA:0,gB:2},  // E  Curaçao 0-2 Costa do Marfim
+  56:{gA:2,gB:1},  // E  Equador 2-1 Alemanha
+  57:{gA:1,gB:1},  // F  Japão 1-1 Suécia
+  58:{gA:1,gB:3},  // F  Tunísia 1-3 Holanda
+  59:{gA:3,gB:2},  // D  Turquia 3-2 EUA
+  60:{gA:0,gB:0},  // D  Paraguai 0-0 Austrália
+  61:{gA:1,gB:4},  // I  Noruega 1-4 França
+  62:{gA:5,gB:0},  // I  Senegal 5-0 Iraque
+  63:{gA:0,gB:0},  // H  Cabo Verde 0-0 Arábia Saudita
+  64:{gA:0,gB:1},  // H  Uruguai 0-1 Espanha
+  65:{gA:1,gB:5},  // G  Nova Zelândia 1-5 Bélgica
+  66:{gA:1,gB:1},  // G  Egito 1-1 Irã
+  67:{gA:0,gB:2},  // L  Panamá 0-2 Inglaterra
+  68:{gA:2,gB:1},  // L  Croácia 2-1 Gana
+  69:{gA:0,gB:0},  // K  Colômbia 0-0 Portugal
+  70:{gA:3,gB:1},  // K  RD Congo 3-1 Uzbequistão
+  71:{gA:1,gB:3},  // J  Jordânia 1-3 Argentina
+  72:{gA:3,gB:3},  // J  Argélia 3-3 Áustria
+  // Mata-mata (73-104): preencher conforme acontecer, ex.: 'k73':{gA:1,gB:0} ou 'k85':{gA:1,gB:1,pw:'A'}
 };
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
@@ -413,6 +486,25 @@ const groupClinch = (teams, games) => {
   const out = {}; teams.forEach(t => out[t] = { first: true, adv: true, out: true, wEver: 0, bEver: 99 });
   const remaining = games.filter(g => !g.res), fixed = games.filter(g => g.res);
   const R = remaining.length;
+  // Grupo COMPLETO: posição final é exata — usa o mesmo desempate FIFA do MC (rankGroup, com saldo/gols),
+  // não só V/E/D. (A enumeração abaixo só conhece V/E/D, então não separaria empates resolvidos pelo saldo.)
+  if (R === 0 && games.every(g => g.gA != null && g.gB != null)) {
+    const tb = {}; teams.forEach(t => tb[t] = { pts: 0, gf: 0, ga: 0, gd: 0 });
+    const gm = games.map(g => ({ home: g.h, away: g.a, gA: g.gA, gB: g.gB }));
+    gm.forEach(({ home, away, gA, gB }) => {
+      tb[home].gf += gA; tb[home].ga += gB; tb[home].gd += gA - gB;
+      tb[away].gf += gB; tb[away].ga += gA; tb[away].gd += gB - gA;
+      if (gA > gB) tb[home].pts += 3; else if (gA < gB) tb[away].pts += 3; else { tb[home].pts++; tb[away].pts++; }
+    });
+    const { sorted, crit } = rankGroup(teams, tb, gm);
+    const res = {};
+    sorted.forEach((t, i) => {
+      const pos = i + 1;
+      const byLots = crit[t] === 'rand' || (i > 0 && crit[sorted[i - 1]] === 'rand'); // separado de um vizinho só por sorteio
+      res[t] = { first: pos === 1, adv: pos <= 2, out: pos >= 3, pos: byLots ? null : pos };
+    });
+    return res;
+  }
   if (R > 8) { teams.forEach(t => out[t] = { first: false, adv: false, out: false, pos: null }); return out; } // proteção
   const codes = ['H', 'D', 'A'], total = Math.pow(3, R);
   for (let mask = 0; mask < total; mask++) {
@@ -688,6 +780,38 @@ const koAdvProb = (a, b, tA, tB) => {
   const r90 = agg(dist(la), dist(lb)), ret = agg(dist(la * .33), dist(lb * .33));
   const pen = Math.max(0, Math.min(1, .5 + (a - b) / 4000));
   return { pAdvA: r90.h + r90.e * (ret.h + ret.e * pen), r90, ret, pen };
+};
+// Probabilidade AO VIVO no mata-mata: a partir do estado atual (τ, placar, vermelhos) dá V/E/D ao
+// fim do tempo normal (via liveProbs) e P(cada time AVANÇA) dobrando prorrogação (λ·0.33) + pênaltis,
+// exatamente como koAdvProb. Empate no fim do tempo normal = prorrogação.
+const liveKO = (a, b, tA, tB, st) => {
+  const lp = liveProbs(a, b, tA, tB, st);
+  const { la, lb } = cL(a, b, matchTilt(tA, tB));
+  const adjA = Math.pow(0.78, st.redsA || 0) * Math.pow(1.12, st.redsB || 0);
+  const adjB = Math.pow(0.78, st.redsB || 0) * Math.pow(1.12, st.redsA || 0);
+  const distP = l => { const d = []; let c = 0; for (let g = 0; g < 7; g++) { d.push(pp(l, g)); c += d[g]; } d.push(Math.max(0, 1 - c)); return d; };
+  const agg = (dA, dB) => { let h = 0, e = 0, w = 0; for (let i = 0; i <= 7; i++) for (let j = 0; j <= 7; j++) { const p = dA[i] * dB[j]; if (i > j) h += p; else if (i === j) e += p; else w += p; } return { h, e, w }; };
+  const ret = agg(distP(la * 0.33 * adjA), distP(lb * 0.33 * adjB)); // prorrogação (~30', um terço do tempo normal)
+  const pen = Math.max(0, Math.min(1, 0.5 + (a - b) / 4000));
+  const pAdvA = lp.pH / 100 + (lp.pD / 100) * (ret.h + ret.e * pen);
+  return { ...lp, pAdvA: pAdvA * 100, pAdvB: (1 - pAdvA) * 100, pen: pen * 100, ret };
+};
+// Série da evolução de P(avança) ao longo do tempo normal (mesma malha de τ de liveSeriesCalc).
+const liveSeriesKO = (eH, eA, tA, tB, ev, s1, s2, base = { gA: 0, gB: 0, redsA: 0, redsB: 0 }) => {
+  const total = 90 + s1 + s2;
+  const hasEv = (ev || []).length > 0;
+  const taus = [];
+  for (let t = 0; t <= total; t++) taus.push(t);
+  for (const e of ev || []) if (e.m >= 0 && e.m <= total) { taus.push(Math.max(0, e.m - 0.01)); taus.push(e.m); }
+  taus.sort((a, b) => a - b);
+  const out = []; let prev = -1;
+  for (const tau of taus) {
+    if (tau === prev) continue; prev = tau;
+    const stt = hasEv ? evState(ev, tau) : base;
+    const k = liveKO(eH, eA, tA, tB, { tau, ...stt, s1, s2 });
+    out.push({ tau, pAdvA: k.pAdvA, pAdvB: k.pAdvB, pET: k.pD });
+  }
+  return out;
 };
 
 // Monte Carlo
@@ -1028,10 +1152,13 @@ const runMC = (groups, n, ur, conditions = []) => {
   return { ...agg, n, pool, all };
 };
 
-const DYN_K = 20; // K fixo do Elo dinâmico (sem multiplicador de margem de vitória)
+const DYN_K = 60; // K da fase final de Copa do Mundo no eloratings.net
+// Multiplicador de saldo de gols do eloratings.net: 1 (saldo 0/1) · 1.5 (saldo 2) · (11+N)/8 (saldo ≥3).
+const dynG = gd => { const n = Math.abs(gd); return n <= 1 ? 1 : n === 2 ? 1.5 : (11 + n) / 8; };
 // Elo dinâmico: atualiza a força a partir dos jogos de GRUPO já disputados, em ordem de data.
-// Vitória=1, empate=0.5, derrota=0 (sem margem). Retorna { time: ΔElo } a somar sobre rtRaw.
-// Depende dos globais de modelo (_rSys etc.) estarem sincronizados pelo chamador.
+// Fórmula oficial do eloratings.net: ΔElo = K·G·(W − We), com W = vitória 1 / empate 0.5 / derrota 0,
+// G = multiplicador de saldo (dynG) e We = expectativa COM mando (bônus de anfitriã em casa) embutido.
+// Retorna { time: ΔElo } a somar sobre rtRaw. Depende dos globais de modelo (_rSys, _hb etc.) sincronizados.
 const computeDynAdj = (groups, ur, K = DYN_K) => {
   const adj = {};
   const r = t => rtRaw(t) + (adj[t] || 0);
@@ -1039,10 +1166,13 @@ const computeDynAdj = (groups, ur, K = DYN_K) => {
   GS.forEach((row, i) => { if (ur && ur[i] && ur[i].gA != null && ur[i].gB != null) idxs.push(i); });
   idxs.sort((a, b) => dateKey(GS[a][3]) - dateKey(GS[b][3]) || (GS_BRT[a] || '').localeCompare(GS_BRT[b] || ''));
   idxs.forEach(i => {
-    const [gn, hi, ai] = GS[i];
+    const [gn, hi, ai, , city] = GS[i];
     const h = groups[gn][hi], a = groups[gn][ai], { gA, gB } = ur[i];
-    const exH = 1 / (1 + Math.pow(10, (r(a) - r(h)) / 400));
-    const dH = K * ((gA > gB ? 1 : gA < gB ? 0 : 0.5) - exH);
+    const eH = r(h) + (isHome(h, city) ? _hb : 0); // mando: bônus da anfitriã jogando em casa
+    const eA = r(a) + (isHome(a, city) ? _hb : 0);
+    const exH = 1 / (1 + Math.pow(10, (eA - eH) / 400));
+    const W = gA > gB ? 1 : gA < gB ? 0 : 0.5;
+    const dH = K * dynG(gA - gB) * (W - exH);
     adj[h] = (adj[h] || 0) + dH; adj[a] = (adj[a] || 0) - dH;
   });
   return adj;
@@ -1126,12 +1256,15 @@ export default function WC2026() {
   const [duelExpand, setDuelExpand] = useState(null); // round name when expanded
   const [liveCard, setLiveCard] = useState(null); // idx of GS card expanded for in-game calc
   const [liveInputs, setLiveInputs] = useState({}); // { [idx]: { tau, gA, gB, redsA, redsB, s1, s2, csA, csB, ev } }
+  const [liveKOmn, setLiveKOmn] = useState(null); // nº do jogo de mata-mata expandido para cálculo ao vivo
+  const [liveKOInputs, setLiveKOInputs] = useState({}); // { [mn]: { tau, gA, gB, redsA, redsB, s1, s2, ev } }
   const [evForm, setEvForm] = useState({ t: 'g', s: 'A', m: '' }); // editor de evento minutado do card ao vivo aberto
   const [koHist, setKoHist] = useState(null); // mn do card KO com histórico de Copas aberto
   const [clsOpen, setClsOpen] = useState(null); // idx do jogo GS com a tabela de classificação antes→agora aberta
   const [clsMetric, setClsMetric] = useState('class'); // métrica observada na tabela de impacto: class|p1..p4|pts|gf|gd
   const [preOpen, setPreOpen] = useState(null); // idx do jogo GS (ainda sem placar) com o "E se?" pré-jogo aberto
   const [bracketSel, setBracketSel] = useState(null); // {type:'match',mn} | {type:'group',gn} | null — painel de detalhe do bracket
+  const [brLayout, setBrLayout] = useState(() => lsLoad('brLayout', 'sides')); // 'sides' (chaveamento 2 lados) | 'pathways' (antigo, backup)
   const [selCombo, setSelCombo] = useState(null); // combinação de 3ºs fixada manualmente (null = automática, a mais provável)
   const [surSort, setSurSort] = useState('bits'); // ordenação da aba Surpresas: 'bits' | 'impact'
   const [surModels, setSurModels] = useState(false); // mostra a comparação de modelos (backtest) dentro da aba Surpresas
@@ -1245,7 +1378,7 @@ export default function WC2026() {
       const NB = Math.min(Math.max(100, Math.floor(+nSim) || 10000), 30000);
       const r = runMC(groups, NB, {}, []);
       _dynAdj = svDyn; // restaura p/ render (rt) e demais cálculos seguirem com o ajuste vigente
-      setBaseAgg({ p: r.p, g3p: r.g3p, muPct: r.muPct, comboList: r.comboList, tmPct: r.tmPct, posMu: r.posMu, matchTm: r.matchTm, posTm: r.posTm, posVsTm: r.posVsTm, tmPos: r.tmPos, posWho: r.posWho, matchPos: r.matchPos, matchWin: r.matchWin, matchSide: r.matchSide, cutoff3rd: r.cutoff3rd, tpc: r.tpc, matchWho: r.matchWho, n: NB });
+      setBaseAgg({ p: r.p, g3p: r.g3p, muPct: r.muPct, comboList: r.comboList, tmPct: r.tmPct, posMu: r.posMu, matchTm: r.matchTm, posTm: r.posTm, posVsTm: r.posVsTm, tmPos: r.tmPos, posWho: r.posWho, matchPos: r.matchPos, matchWin: r.matchWin, matchSide: r.matchSide, cutoff3rd: r.cutoff3rd, tpc: r.tpc, matchWho: r.matchWho, scoreDist: r.scoreDist, n: NB });
     } catch (err) { /* baseline é só indicador; falha não quebra o app */ }
   };
   const maybeBaseline = () => { const mk = modelKey(); if (baseKeyRef.current !== mk) { baseKeyRef.current = mk; computeBaseline(); } };
@@ -1348,7 +1481,7 @@ export default function WC2026() {
         const r = gF > gA ? 1 : gF < gA ? 0 : 0.5;
         if (r === 1) s.w++; else if (r === 0.5) s.d++; else s.l++;
         const exp = 1 / (1 + Math.pow(10, (eAg - eFor) / 400));
-        s.elo += DYN_K * (r - exp);
+        s.elo += DYN_K * dynG(gF - gA) * (r - exp);
         const pr = mProbs(eFor, eAg, team, opp);
         s.dPts += (r === 1 ? 3 : r === 0.5 ? 1 : 0) - (3 * pr.pH / 100 + 1 * pr.pD / 100);
       };
@@ -1656,6 +1789,23 @@ export default function WC2026() {
     return liveSeriesCalc(eH, eA, home, away, liC?.ev || [], cS1, cS2, base, target);
   }, [liveCard, liC?.ev, liC?.s1, liC?.s2, liC?.gA, liC?.gB, liC?.redsA, liC?.redsB, liC?.csA, liC?.csB, injuries, groups, rSys, customElo, customME, useTilt, favWeight, spread, homeAdv]);
 
+  // Mata-mata ao vivo: série de P(avança) ao longo do tempo normal (espelha liveChart, sem alvo de placar).
+  const LIKO_DEF = { tau: 0, gA: 0, gB: 0, redsA: 0, redsB: 0, s1: 3, s2: 6, ev: [] };
+  const liKO = liveKOmn != null ? liveKOInputs[liveKOmn] : null;
+  const liveKOChart = useMemo(() => {
+    if (liveKOmn == null) return null;
+    _rSys = rSys; _customElo = customElo; _ME = customME; _useTilt = useTilt; _fav = favWeight; _spread = spread; _injM = injuries; _hb = homeAdv;
+    const st = resolveStandings(groups, userRes);
+    const ko = resolveKO(st, userRes);
+    const m = ko[liveKOmn];
+    if (!m || !m.h || !m.a) return null;
+    const eH = efCity(m.h, KO_CITY[liveKOmn]), eA = efCity(m.a, KO_CITY[liveKOmn]);
+    const cS1 = Math.max(0, Math.min(15, liKO?.s1 == null ? 3 : +liKO.s1 || 0));
+    const cS2 = Math.max(0, Math.min(15, liKO?.s2 == null ? 6 : +liKO.s2 || 0));
+    const base = { gA: +liKO?.gA || 0, gB: +liKO?.gB || 0, redsA: +liKO?.redsA || 0, redsB: +liKO?.redsB || 0 };
+    return liveSeriesKO(eH, eA, m.h, m.a, liKO?.ev || [], cS1, cS2, base);
+  }, [liveKOmn, liKO?.ev, liKO?.s1, liKO?.s2, liKO?.gA, liKO?.gB, liKO?.redsA, liKO?.redsB, groups, userRes, rSys, customElo, customME, useTilt, favWeight, spread, homeAdv]);
+
   // Cenário modal/mediano de um grupo: cada um dos 6 jogos termina no placar
   // moda/mediana (resultados preenchidos e lesões respeitados); a tabela deriva
   // desses 6 placares — Pts/SG/GM/V-E-D consistentes entre si e entre os times.
@@ -1800,6 +1950,7 @@ export default function WC2026() {
   // Persistência: salva resultados e configurações no navegador (sobrevive a fechar/reabrir).
   useEffect(() => { lsSave('userRes', userRes); }, [userRes]);
   useEffect(() => { lsSave('rSys', rSys); }, [rSys]);
+  useEffect(() => { lsSave('brLayout', brLayout); }, [brLayout]);
   useEffect(() => { lsSave('useTilt', useTilt); }, [useTilt]);
   useEffect(() => { lsSave('nSim', nSim); }, [nSim]);
   useEffect(() => { lsSave('customElo', customElo); }, [customElo]);
@@ -1913,7 +2064,7 @@ export default function WC2026() {
       GS.forEach(([g, hi, ai], idx) => {
         if (g !== gn) return; const fx = userRes[idx];
         const res = (fx?.gA != null && fx?.gB != null) ? (fx.gA > fx.gB ? 'H' : fx.gA < fx.gB ? 'A' : 'D') : null;
-        games.push({ h: ts[hi], a: ts[ai], res });
+        games.push({ h: ts[hi], a: ts[ai], res, gA: fx?.gA, gB: fx?.gB });
       });
       const gc = groupClinch(ts, games); // { time: {first, adv, out, pos} } por enumeração (confronto direto)
       grp[gn] = { gc };
@@ -2073,7 +2224,7 @@ export default function WC2026() {
             {spread ? '⚽ Goleada ON' : '⚽ Goleada'}
           </button>
         </Tip>
-        <Tip text={`Elo dinâmico: atualiza a força de cada seleção a partir dos resultados de grupo já disputados (Elo, K=${DYN_K} fixo, sem margem de vitória). Some-se ao rating escolhido e afeta só os jogos ainda não disputados. Uma goleada passa a melhorar as chances futuras do time, não só o saldo. Conservador de propósito (amostra pequena); desligado por padrão.`}>
+        <Tip text={`Elo dinâmico: atualiza a força de cada seleção a partir dos resultados de grupo já disputados, com a fórmula oficial do eloratings.net para Copa do Mundo (K=${DYN_K}, multiplicador de saldo de gols e mando da anfitriã). Soma-se ao rating escolhido e afeta só os jogos ainda não disputados. Uma goleada melhora mais as chances futuras do time. Desligado por padrão.`}>
           <button onClick={() => setDynElo(s => !s)} style={{ padding: '5px 9px', fontSize: '11px', fontWeight: 700, background: dynElo ? `${bl}33` : card, color: dynElo ? bl : dm, border: `1px solid ${dynElo ? bl : bd}`, borderRadius: '5px', cursor: 'pointer' }}>
             {dynElo ? '📈 Elo dinâmico ON' : '📈 Elo dinâmico'}
           </button>
@@ -2090,7 +2241,7 @@ export default function WC2026() {
         const movers = Object.entries(_dynAdj).filter(([, v]) => Math.abs(v) >= 0.5).sort((a, b) => Math.abs(b[1]) - Math.abs(a[1])).slice(0, 8);
         if (!movers.length) return null;
         return (
-          <div style={{ margin: '0 10px 6px', padding: '5px 10px', fontSize: '10px', color: dm, background: `${bl}10`, border: `1px solid ${bl}33`, borderRadius: '5px', display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }} title={`Ajuste dinâmico de Elo (K=${DYN_K}) aplicado sobre o rating base a partir dos resultados de grupo já disputados. Afeta só os jogos ainda não simulados.`}>
+          <div style={{ margin: '0 10px 6px', padding: '5px 10px', fontSize: '10px', color: dm, background: `${bl}10`, border: `1px solid ${bl}33`, borderRadius: '5px', display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }} title={`Ajuste dinâmico de Elo (eloratings.net: K=${DYN_K} + saldo de gols + mando) aplicado sobre o rating base a partir dos resultados de grupo já disputados. Afeta só os jogos ainda não simulados.`}>
             <span style={{ color: bl, fontWeight: 700 }}>📈 Elo dinâmico:</span>
             {movers.map(([t, v]) => <span key={t} style={{ whiteSpace: 'nowrap' }}>{fl(t)} {nm(t)} <strong style={{ color: v > 0 ? gn : rd }}>{v > 0 ? '+' : ''}{Math.round(v)}</strong></span>)}
           </div>
@@ -2426,8 +2577,66 @@ export default function WC2026() {
                 </div>
               );
 
+              // ── Chaveamento de 2 lados (estilo pôster) — reusa r32/r16/qf/sf, MB e clinch ──
+              // Índices (topo→base) de cada lado: mesma topologia dos pathways (esq=PW1, dir=PW2).
+              const L = { r32: [1, 4, 0, 2, 10, 11, 8, 9], r16: [0, 1, 4, 5], qf: [0, 1], sf: 0 };
+              const R = { r32: [3, 5, 6, 7, 13, 15, 12, 14], r16: [2, 3, 6, 7], qf: [2, 3], sf: 1 };
+              const RoundCol = ({ items, align }) => (
+                <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-around', alignItems: align, gap: '2px' }}>
+                  {items.map(it => <MB key={it.mn} {...it} />)}
+                </div>
+              );
+              const Bridge = ({ n, side }) => (
+                <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-around', alignSelf: 'stretch', width: '13px', padding: '16px 0' }}>
+                  {Array.from({ length: n }).map((_, i) => (
+                    <div key={i} style={{ flex: 1, margin: '7px 0', [side === 'left' ? 'borderRight' : 'borderLeft']: `1.5px solid ${bd}`, borderTop: `1.5px solid ${bd}`, borderBottom: `1.5px solid ${bd}`, [side === 'left' ? 'borderTopRightRadius' : 'borderTopLeftRadius']: '6px', [side === 'left' ? 'borderBottomRightRadius' : 'borderBottomLeftRadius']: '6px' }} />
+                  ))}
+                </div>
+              );
+              const champ0 = [...ranked].sort((a, b) => (b.ch || 0) - (a.ch || 0))[0];
+              const CenterFinal = () => (
+                <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', minWidth: '180px', padding: '0 8px' }}>
+                  <div style={{ fontSize: '20px', marginBottom: '4px' }}>🏆</div>
+                  <div onClick={() => setBracketSel(s => s?.type === 'match' && s.mn === 104 ? null : { type: 'match', mn: 104 })} title="Clique para ver os finalistas mais prováveis" style={{ textAlign: 'center', padding: '10px 12px', background: `linear-gradient(135deg,${acc}22,${card})`, borderRadius: '8px', border: `2px solid ${gd}55`, minWidth: '168px', cursor: 'pointer' }}>
+                    <div style={{ fontSize: '8px', color: dm, marginBottom: '4px' }}>M104 FINAL • MetLife 19/Jul</div>
+                    <div style={{ fontSize: '12px', fontWeight: 700 }}>{fl(finH)} {nm(finH)}</div>
+                    <div style={{ fontSize: '9px', color: dm, margin: '1px 0' }}>vs</div>
+                    <div style={{ fontSize: '12px', fontWeight: 700 }}>{fl(finA)} {nm(finA)}</div>
+                    {champ0 && <div style={{ borderTop: `1px solid ${bd}`, marginTop: '6px', paddingTop: '5px' }}><div style={{ fontSize: '8px', color: dm }}>Campeão mais provável</div><div style={{ fontSize: '11px', fontWeight: 700, color: gd }}>{fl(champ0.t)} {nm(champ0.t)} 🏆 {champ0.ch.toFixed(1)}%</div></div>}
+                  </div>
+                  <div onClick={() => setBracketSel(s => s?.type === 'match' && s.mn === 103 ? null : { type: 'match', mn: 103 })} title="Disputa de 3º lugar" style={{ fontSize: '8px', color: dm, marginTop: '8px', cursor: 'pointer', borderBottom: `1px dotted ${dm}` }}>🥉 3º lugar • M103 Miami 18/Jul</div>
+                </div>
+              );
+              const sidesView = (
+                <div style={{ overflowX: 'auto', paddingBottom: '6px' }}>
+                  <div style={{ display: 'flex', alignItems: 'stretch', gap: '1px', minWidth: '1180px' }}>
+                    <RoundCol align="flex-start" items={L.r32.map(i => ({ ...r32[i], label: 'R32' }))} />
+                    <Bridge n={4} side="left" />
+                    <RoundCol align="flex-start" items={L.r16.map(i => ({ ...r16[i], label: 'R16' }))} />
+                    <Bridge n={2} side="left" />
+                    <RoundCol align="flex-start" items={L.qf.map(i => ({ ...qf[i], label: 'QF' }))} />
+                    <Bridge n={1} side="left" />
+                    <RoundCol align="flex-start" items={[{ ...sf[L.sf], label: 'SF' }]} />
+                    <CenterFinal />
+                    <RoundCol align="flex-end" items={[{ ...sf[R.sf], label: 'SF' }]} />
+                    <Bridge n={1} side="right" />
+                    <RoundCol align="flex-end" items={R.qf.map(i => ({ ...qf[i], label: 'QF' }))} />
+                    <Bridge n={2} side="right" />
+                    <RoundCol align="flex-end" items={R.r16.map(i => ({ ...r16[i], label: 'R16' }))} />
+                    <Bridge n={4} side="right" />
+                    <RoundCol align="flex-end" items={R.r32.map(i => ({ ...r32[i], label: 'R32' }))} />
+                  </div>
+                </div>
+              );
+
               return (
                 <div style={{ overflowX:'auto' }}>
+                  <div style={{ display: 'flex', gap: '4px', alignItems: 'center', marginBottom: '8px' }}>
+                    <span style={{ fontSize: '9px', color: dm }}>Layout:</span>
+                    <SB active={brLayout === 'sides'} onClick={() => setBrLayout('sides')}>🏆 Chaveamento</SB>
+                    <SB active={brLayout === 'pathways'} onClick={() => setBrLayout('pathways')}>Caminhos</SB>
+                  </div>
+                  {brLayout === 'sides' ? sidesView : (<>
                   {/* Champion */}
                   <div style={{ textAlign:'center', margin:'0 0 16px', padding:'12px', background:`linear-gradient(135deg,${acc}22,${card})`, borderRadius:'8px', border:`2px solid ${gd}44`, maxWidth:'350px', marginLeft:'auto', marginRight:'auto' }}>
                     <div style={{ fontSize:'8px', color:dm, marginBottom:'4px' }}>M104 Final • MetLife 19/Jul</div>
@@ -2465,6 +2674,7 @@ export default function WC2026() {
                     hb1={{r32a:3, r32b:5, r32c:6, r32d:7, r16a:2, r16b:3, qfi:2}}
                     hb2={{r32a:13, r32b:15, r32c:12, r32d:14, r16a:6, r16b:7, qfi:3}}
                   />
+                  </>)}
 
                   {/* Groups */}
                   <div style={{ fontSize:'11px', fontWeight:700, color:acc, marginBottom:'6px' }}>Fase de Grupos</div>
@@ -4047,7 +4257,9 @@ export default function WC2026() {
             })()}
 
             {muView === 'scores' && scoreDistData && (() => {
-              const { gs, ko } = scoreDistData;
+              // Modelo = simulação PRÉ-COPA (sem resultados): compara o que o modelo inicial previa × o que aconteceu.
+              // (Sem isso, os jogos já fixados entrariam no "modelo" e o teste compararia a realidade consigo mesma.)
+              const { gs, ko } = baseAgg?.scoreDist || scoreDistData;
               const gsTotal = Object.values(gs).reduce((s,v) => s + v, 0);
               const koTotal = Object.values(ko).reduce((s,v) => s + v, 0);
               const allScores = {};
@@ -4079,7 +4291,7 @@ export default function WC2026() {
               const pG = se > 0 ? 2 * (1 - normCdf(Math.abs(zG))) : null;
               return (<>
                 <div style={{ fontSize: '12px', fontWeight: 700, marginBottom: '4px', color: bl }}>Frequência de placares</div>
-                <div style={{ fontSize: '10px', color: dm, marginBottom: '8px' }}>Placares normalizados (maior×menor). {scFilter === 'gs' ? `${gsTotal.toLocaleString()} jogos de grupo.` : scFilter === 'ko' ? `${koTotal.toLocaleString()} jogos de mata-mata (incluindo prorrogação).` : `${total.toLocaleString()} jogos totais.`}</div>
+                <div style={{ fontSize: '10px', color: dm, marginBottom: '8px' }}>Modelo = simulação <strong style={{ color: dm }}>pré-Copa</strong> (sem resultados) vs. o que aconteceu de verdade. Placares normalizados (maior×menor). {scFilter === 'gs' ? `${gsTotal.toLocaleString()} jogos de grupo simulados.` : scFilter === 'ko' ? `${koTotal.toLocaleString()} jogos de mata-mata simulados (incluindo prorrogação).` : `${total.toLocaleString()} jogos simulados.`}</div>
                 <div style={{ display: 'flex', gap: '3px', marginBottom: '10px' }}>
                   {[['all','Todos'],['gs','Grupos'],['ko','Mata-mata']].map(([id,l]) => (
                     <SB key={id} active={scFilter === id} onClick={() => setScFilter(id)}>{l}</SB>
@@ -4087,7 +4299,7 @@ export default function WC2026() {
                 </div>
                 <div style={{ display: 'flex', gap: '12px', marginBottom: '12px', flexWrap: 'wrap' }}>
                   <div style={{ background: card, borderRadius: '6px', border: `1px solid ${bd}`, padding: '8px 14px', textAlign: 'center' }}>
-                    <div style={{ fontSize: '9px', color: dm }}>Gols/jogo (modelo)</div>
+                    <div style={{ fontSize: '9px', color: dm }}>Gols/jogo (modelo pré-Copa)</div>
                     <div style={{ fontSize: '16px', fontWeight: 700, color: acc }}>{avgGoals.toFixed(2)}</div>
                   </div>
                   {obsN > 0 && (
@@ -4097,13 +4309,13 @@ export default function WC2026() {
                     </div>
                   )}
                   <div style={{ background: card, borderRadius: '6px', border: `1px solid ${bd}`, padding: '8px 14px', textAlign: 'center' }}>
-                    <div style={{ fontSize: '9px', color: dm }}>Empates (modelo)</div>
+                    <div style={{ fontSize: '9px', color: dm }}>Empates (modelo pré-Copa)</div>
                     <div style={{ fontSize: '16px', fontWeight: 700, color: bl }}>{drawPct.toFixed(1)}%</div>
                   </div>
                 </div>
                 {obsN > 0 && pG != null && (
                   <div style={{ background: `${(pG < 0.05 ? rd : bl)}10`, border: `1px solid ${(pG < 0.05 ? rd : bl)}44`, borderRadius: '6px', padding: '8px 12px', marginBottom: '12px', maxWidth: '560px' }} title="H0: os gols/jogo reais vêm da mesma distribuição do modelo. z = (média real − média modelo) / erro-padrão (variância do modelo / n). p bicaudal.">
-                    <div style={{ fontSize: '11px', fontWeight: 700, color: pG < 0.05 ? rd : bl, marginBottom: '2px' }}>🧪 Teste: gols/jogo real vs simulação {obsN < 8 && <span style={{ color: acc, fontWeight: 400 }}>(amostra pequena — pouco poder)</span>}</div>
+                    <div style={{ fontSize: '11px', fontWeight: 700, color: pG < 0.05 ? rd : bl, marginBottom: '2px' }}>🧪 Teste: gols/jogo real vs modelo pré-Copa {obsN < 8 && <span style={{ color: acc, fontWeight: 400 }}>(amostra pequena — pouco poder)</span>}</div>
                     <div style={{ fontSize: '10px', color: tx, lineHeight: 1.5 }}>Real <strong>{obsMean.toFixed(2)}</strong> vs modelo <strong>{avgGoals.toFixed(2)}</strong> ({obsN} jogos) · z = <strong>{zG.toFixed(2)}</strong> · p = <strong>{pG < 0.001 ? '<0,001' : pG.toFixed(3)}</strong> → {pG < 0.05 ? <span style={{ color: rd, fontWeight: 700 }}>diferença significativa (5%): a Copa está {obsMean > avgGoals ? 'mais' : 'menos'} goleadora que o modelo previu</span> : <span style={{ color: gn, fontWeight: 700 }}>consistente com o modelo (sem diferença significativa)</span>}</div>
                   </div>
                 )}
@@ -4725,6 +4937,7 @@ export default function WC2026() {
                                 <span style={{ color: dm }}>E {pr.pD.toFixed(0)}%</span>
                                 <span style={{ color: bl }}>{pr.pA.toFixed(0)}%</span>
                                 <button onClick={() => setKoHist(h => h === m.mn ? null : m.mn)} title="Confrontos anteriores em Copas entre os dois times" style={{ padding: '0px 5px', fontSize: '10px', background: koHist === m.mn ? `${gd}33` : 'transparent', color: koHist === m.mn ? gd : dm, border: `1px solid ${koHist === m.mn ? gd : bd}`, borderRadius: '3px', cursor: 'pointer' }}>📜</button>
+                                <button onClick={() => setLiveKOmn(v => v === m.mn ? null : m.mn)} title="Probabilidade ao vivo (intra-jogo): minuto, placar e eventos → chance de avançar" style={{ padding: '0px 5px', fontSize: '10px', background: liveKOmn === m.mn ? `${acc}33` : 'transparent', color: liveKOmn === m.mn ? acc : dm, border: `1px solid ${liveKOmn === m.mn ? acc : bd}`, borderRadius: '3px', cursor: 'pointer' }}>{liveKOmn === m.mn ? '▼ ao vivo' : '⏱️'}</button>
                               </div>}
                             </div>
                             <div style={{ display: 'grid', gridTemplateColumns: '1fr 90px 1fr', alignItems: 'center', gap: '4px' }}>
@@ -4758,6 +4971,161 @@ export default function WC2026() {
                                 <div style={{ marginTop: '3px', display: 'flex', gap: '10px', alignItems: 'center', justifyContent: 'center', fontSize: '9px', flexWrap: 'wrap' }}>
                                   <span title="Surpresa em bits (−log₂ da prob. pré-jogo, 90 min — pênaltis não entram). Placar = aquele placar exato; Resultado = o desfecho 1X2 (quem venceu/empatou, a 'zebra').">🎯 surpresa{tie ? " (90')" : ''} — <span style={{ color: s.bitsExact > 6 ? rd : s.bitsExact > 4.5 ? '#f97316' : acc, fontWeight: 700 }}>placar {s.bitsExact.toFixed(1)} bits</span> <span style={{ color: dm }}>({(s.pExact * 100).toFixed(1)}%)</span> · <span style={{ color: s.bitsOut > 6 ? rd : s.bitsOut > 4.5 ? '#f97316' : bl, fontWeight: 700 }}>resultado {s.bitsOut.toFixed(1)} bits</span> <span style={{ color: dm }}>({(s.pOut * 100).toFixed(0)}%)</span></span>
                                   {qi && <span style={{ color: qi.dW > 15 ? rd : qi.dW > 5 ? '#f97316' : dm }} title={`Chance de ${nm(qi.winner)} avançar ia de ${qi.pAdvW.toFixed(0)}% → 100% (analítico: 90' + prorrogação + pênaltis, espelha o modelo do torneio)`}>⚡ avança: {nm(qi.winner)} +{qi.dW.toFixed(1)} p.p.</span>}
+                                </div>
+                              );
+                            })()}
+                            {ready && liveKOmn === m.mn && (() => {
+                              const li = { ...LIKO_DEF, ...(liveKOInputs[m.mn] || {}) };
+                              const setLI = (field, val) => setLiveKOInputs(p => ({ ...p, [m.mn]: { ...LIKO_DEF, ...(p[m.mn] || {}), [field]: val } }));
+                              const kS1 = Math.max(0, Math.min(15, +li.s1 || 0)), kS2 = Math.max(0, Math.min(15, +li.s2 || 0));
+                              const kTau = Math.max(0, Math.min(90 + kS1 + kS2, +li.tau || 0));
+                              const hasEv = li.ev.length > 0;
+                              const kSt = hasEv ? evState(li.ev, kTau) : { gA: +li.gA || 0, gB: +li.gB || 0, redsA: +li.redsA || 0, redsB: +li.redsB || 0 };
+                              const eH = efCity(m.h, KO_CITY[m.mn]), eA = efCity(m.a, KO_CITY[m.mn]);
+                              const kp = liveKO(eH, eA, m.h, m.a, { tau: kTau, ...kSt, s1: kS1, s2: kS2 });
+                              return (
+                                <div style={{ marginTop: '6px', padding: '8px 10px', background: '#0d111d', borderRadius: '4px', border: `1px solid ${acc}33` }}>
+                                  <div style={{ fontSize: '10px', fontWeight: 700, color: acc, marginBottom: '6px' }}>⏱️ Probabilidade ao vivo — mata-mata (90' + prorrogação + pênaltis)</div>
+                                  <div style={{ display: 'grid', gridTemplateColumns: 'auto 1fr auto auto auto auto auto', gap: '6px', alignItems: 'center', fontSize: '10px', marginBottom: '4px' }}>
+                                    <span style={{ color: dm }}>Min:</span>
+                                    <input type="range" min="0" max={90 + kS1 + kS2} value={kTau} onChange={e => setLI('tau', +e.target.value)} style={{ width: '100%' }} />
+                                    <span style={{ fontWeight: 700, color: acc, minWidth: '40px', textAlign: 'right' }}>{fmtClock(kTau, kS1)}{hasEv && <span style={{ color: tx, fontWeight: 600 }}> {kSt.gA}×{kSt.gB}</span>}</span>
+                                    <button onClick={() => setLI('tau', 0)} style={{ padding: '1px 6px', fontSize: '9px', background: 'transparent', color: dm, border: `1px solid ${bd}`, borderRadius: '3px', cursor: 'pointer' }}>0'</button>
+                                    <button onClick={() => setLI('tau', 45 + kS1)} style={{ padding: '1px 6px', fontSize: '9px', background: 'transparent', color: dm, border: `1px solid ${bd}`, borderRadius: '3px', cursor: 'pointer' }}>HT</button>
+                                    <button onClick={() => setLI('tau', 90 + kS1)} style={{ padding: '1px 6px', fontSize: '9px', background: 'transparent', color: dm, border: `1px solid ${bd}`, borderRadius: '3px', cursor: 'pointer' }} title="90' — começam os acréscimos do 2º tempo">FT</button>
+                                    <button onClick={() => setLI('tau', 90 + kS1 + kS2)} style={{ padding: '1px 6px', fontSize: '9px', background: 'transparent', color: dm, border: `1px solid ${bd}`, borderRadius: '3px', cursor: 'pointer' }} title="Fim do tempo normal (90' + acréscimos)">Fim</button>
+                                  </div>
+                                  <div style={{ display: 'flex', gap: '6px', alignItems: 'center', fontSize: '9px', color: dm, marginBottom: '6px', flexWrap: 'wrap' }}>
+                                    <span>Acréscimos:</span><span>1ºT +</span>
+                                    <input type="number" min="0" max="15" value={li.s1} onChange={e => setLI('s1', e.target.value === '' ? 0 : +e.target.value)} style={{ width: '30px', padding: '1px', textAlign: 'center', background: card, color: tx, border: `1px solid ${bd}`, borderRadius: '3px', fontSize: '10px' }} />
+                                    <span>2ºT +</span>
+                                    <input type="number" min="0" max="15" value={li.s2} onChange={e => setLI('s2', e.target.value === '' ? 0 : +e.target.value)} style={{ width: '30px', padding: '1px', textAlign: 'center', background: card, color: tx, border: `1px solid ${bd}`, borderRadius: '3px', fontSize: '10px' }} />
+                                    <span style={{ marginLeft: 'auto' }}>tempo normal: {90 + kS1 + kS2}'</span>
+                                  </div>
+                                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '8px' }}>
+                                    {[[m.h, 'gA', 'redsA'], [m.a, 'gB', 'redsB']].map(([tm, gk, rk]) => (
+                                      <div key={gk}>
+                                        <div style={{ fontSize: '9px', color: dm, marginBottom: '3px', textAlign: 'center' }}>{fl(tm)} {nm(tm)}</div>
+                                        <div style={{ display: 'flex', justifyContent: 'center', gap: '4px', alignItems: 'center', fontSize: '9px' }}>
+                                          <span style={{ color: dm }}>Gols:</span>
+                                          <input type="number" min="0" max="20" value={hasEv ? kSt[gk] : li[gk]} disabled={hasEv} title={hasEv ? 'derivado dos eventos com minuto' : undefined} onChange={e => setLI(gk, +e.target.value || 0)} style={{ width: '36px', padding: '2px', textAlign: 'center', background: card, color: tx, border: `1px solid ${bd}`, borderRadius: '3px', fontSize: '11px', fontWeight: 700, opacity: hasEv ? 0.55 : 1 }} />
+                                          <span style={{ color: dm, marginLeft: '4px' }}>🟥</span>
+                                          <input type="number" min="0" max="3" value={hasEv ? kSt[rk] : li[rk]} disabled={hasEv} title={hasEv ? 'derivado dos eventos com minuto' : undefined} onChange={e => setLI(rk, +e.target.value || 0)} style={{ width: '32px', padding: '2px', textAlign: 'center', background: card, color: tx, border: `1px solid ${bd}`, borderRadius: '3px', fontSize: '11px', opacity: hasEv ? 0.55 : 1 }} />
+                                        </div>
+                                      </div>
+                                    ))}
+                                  </div>
+                                  <div style={{ marginBottom: '8px', padding: '6px 8px', background: card, borderRadius: '3px', border: `1px solid ${bd}` }}>
+                                    <div style={{ display: 'flex', gap: '4px', alignItems: 'center', fontSize: '9px', color: dm, flexWrap: 'wrap' }}>
+                                      <span title="Eventos com minuto alimentam o gráfico; o placar/vermelhos em cada minuto deriva deles">Eventos:</span>
+                                      {[['g', '⚽ Gol'], ['r', '🟥 Verm.']].map(([v, l]) => (
+                                        <button key={v} onClick={() => setEvForm(f => ({ ...f, t: v }))} style={{ padding: '1px 6px', fontSize: '9px', background: evForm.t === v ? `${acc}33` : 'transparent', color: evForm.t === v ? acc : dm, border: `1px solid ${evForm.t === v ? acc : bd}`, borderRadius: '3px', cursor: 'pointer' }}>{l}</button>
+                                      ))}
+                                      {[['A', nm(m.h).slice(0, 8)], ['B', nm(m.a).slice(0, 8)]].map(([v, l]) => (
+                                        <button key={v} onClick={() => setEvForm(f => ({ ...f, s: v }))} style={{ padding: '1px 6px', fontSize: '9px', background: evForm.s === v ? `${(v === 'A' ? gn : bl)}33` : 'transparent', color: evForm.s === v ? (v === 'A' ? gn : bl) : dm, border: `1px solid ${evForm.s === v ? (v === 'A' ? gn : bl) : bd}`, borderRadius: '3px', cursor: 'pointer' }}>{l}</button>
+                                      ))}
+                                      <span>aos</span>
+                                      <input type="number" inputMode="numeric" min="0" max={90 + kS2} placeholder="min" title="Minuto do relógio do jogo (ex.: 23, 60; 93 = 90+3)" value={evForm.m} onChange={e => setEvForm(f => ({ ...f, m: e.target.value }))} style={{ width: '40px', padding: '2px', textAlign: 'center', background: '#0d111d', color: tx, border: `1px solid ${bd}`, borderRadius: '3px', fontSize: '10px' }} />
+                                      <button disabled={evForm.m === '' || isNaN(+evForm.m)} onClick={() => {
+                                        const gm2 = +evForm.m;
+                                        const mm = Math.max(0, Math.min(90 + kS1 + kS2, gm2 <= 45 ? gm2 : gm2 + kS1));
+                                        setLI('ev', [...li.ev, { m: mm, t: evForm.t, s: evForm.s }].sort((x, y) => x.m - y.m));
+                                        setEvForm(f => ({ ...f, m: '' }));
+                                      }} style={{ padding: '1px 8px', fontSize: '10px', fontWeight: 700, background: evForm.m === '' ? 'transparent' : `${acc}33`, color: evForm.m === '' ? dm : acc, border: `1px solid ${evForm.m === '' ? bd : acc}`, borderRadius: '3px', cursor: evForm.m === '' ? 'default' : 'pointer' }}>+</button>
+                                    </div>
+                                    {hasEv && (
+                                      <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap', marginTop: '5px' }}>
+                                        {li.ev.map((e2, i) => (
+                                          <span key={i} style={{ display: 'inline-flex', gap: '3px', alignItems: 'center', padding: '1px 6px', fontSize: '9px', borderRadius: '3px', background: `${e2.s === 'A' ? gn : bl}18`, border: `1px solid ${e2.s === 'A' ? gn : bl}44`, color: tx }}>
+                                            {e2.t === 'g' ? '⚽' : '🟥'} {fmtClock(e2.m, kS1)} {nm(e2.s === 'A' ? m.h : m.a).slice(0, 3).toUpperCase()}
+                                            <span onClick={() => setLI('ev', li.ev.filter((_, j) => j !== i))} style={{ color: rd, cursor: 'pointer', fontWeight: 700 }}>✕</span>
+                                          </span>
+                                        ))}
+                                        <span onClick={() => setLI('ev', [])} style={{ fontSize: '8px', color: dm, cursor: 'pointer', alignSelf: 'center', textDecoration: 'underline' }}>limpar</span>
+                                      </div>
+                                    )}
+                                  </div>
+                                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '4px', fontSize: '10px', marginBottom: '6px' }}>
+                                    <div style={{ background: `${gn}22`, padding: '5px', borderRadius: '3px', textAlign: 'center', border: `1px solid ${gn}44` }}>
+                                      <div style={{ fontSize: '8px', color: dm }}>✅ Avança {nm(m.h).slice(0, 10)}</div>
+                                      <div style={{ fontSize: '16px', fontWeight: 700, color: gn }}>{kp.pAdvA.toFixed(1)}%</div>
+                                    </div>
+                                    <div style={{ background: `${bl}22`, padding: '5px', borderRadius: '3px', textAlign: 'center', border: `1px solid ${bl}44` }}>
+                                      <div style={{ fontSize: '8px', color: dm }}>✅ Avança {nm(m.a).slice(0, 10)}</div>
+                                      <div style={{ fontSize: '16px', fontWeight: 700, color: bl }}>{kp.pAdvB.toFixed(1)}%</div>
+                                    </div>
+                                  </div>
+                                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '4px', fontSize: '10px', marginBottom: '6px' }}>
+                                    <div style={{ background: `${gn}14`, padding: '3px', borderRadius: '3px', textAlign: 'center', border: `1px solid ${gn}33` }}>
+                                      <div style={{ fontSize: '8px', color: dm }}>V {nm(m.h).slice(0, 8)} (90')</div>
+                                      <div style={{ fontSize: '12px', fontWeight: 700, color: gn }}>{kp.pH.toFixed(1)}%</div>
+                                    </div>
+                                    <div style={{ background: `${dm}18`, padding: '3px', borderRadius: '3px', textAlign: 'center', border: `1px solid ${bd}` }}>
+                                      <div style={{ fontSize: '8px', color: dm }}>Prorrogação</div>
+                                      <div style={{ fontSize: '12px', fontWeight: 700, color: tx }}>{kp.pD.toFixed(1)}%</div>
+                                    </div>
+                                    <div style={{ background: `${bl}14`, padding: '3px', borderRadius: '3px', textAlign: 'center', border: `1px solid ${bl}33` }}>
+                                      <div style={{ fontSize: '8px', color: dm }}>V {nm(m.a).slice(0, 8)} (90')</div>
+                                      <div style={{ fontSize: '12px', fontWeight: 700, color: bl }}>{kp.pA.toFixed(1)}%</div>
+                                    </div>
+                                  </div>
+                                  <div style={{ marginBottom: '6px' }}>
+                                    <div style={{ fontSize: '8px', color: dm, marginBottom: '3px' }}>Placares mais prováveis ao fim do tempo normal</div>
+                                    <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
+                                      {kp.scores.slice(0, 6).map(s => (
+                                        <span key={s.a + '-' + s.b} style={{ padding: '2px 7px', fontSize: '10px', borderRadius: '3px', background: `${acc}18`, border: `1px solid ${acc}33`, color: tx, fontWeight: 600 }}>{s.a}–{s.b} <span style={{ color: acc }}>{(s.p * 100).toFixed(1)}%</span></span>
+                                      ))}
+                                    </div>
+                                  </div>
+                                  {liveKOChart && (() => {
+                                    const W = 800, H = 240, PAD = { l: 38, r: 14, t: 14, b: 26 };
+                                    const total = 90 + kS1 + kS2;
+                                    const xS = t2 => PAD.l + (t2 / total) * (W - PAD.l - PAD.r);
+                                    const yS = p2 => PAD.t + (1 - p2 / 100) * (H - PAD.t - PAD.b);
+                                    const mkPath = key => liveKOChart.map((p2, i) => (i === 0 ? 'M' : 'L') + xS(p2.tau).toFixed(1) + ',' + yS(p2[key]).toFixed(1)).join(' ');
+                                    const last = liveKOChart[liveKOChart.length - 1];
+                                    const series = [['pAdvA', gn, 'Av ' + nm(m.h).slice(0, 3).toUpperCase()], ['pAdvB', bl, 'Av ' + nm(m.a).slice(0, 3).toUpperCase()], ['pET', acc, 'Prorrog.']];
+                                    const hov = chartHover != null ? liveKOChart.reduce((best, p2) => Math.abs(p2.tau - chartHover) < Math.abs(best.tau - chartHover) ? p2 : best) : null;
+                                    const tipX = hov ? Math.min(xS(hov.tau) + 8, W - 118) : 0;
+                                    return (
+                                      <div style={{ marginBottom: '6px' }}>
+                                        <div style={{ fontSize: '8px', color: dm, marginBottom: '2px' }}>Evolução da chance de avançar {hasEv ? '(com os eventos informados)' : '(se o placar/vermelhos atuais se mantiverem)'} — passe o mouse</div>
+                                        <svg viewBox={`0 0 ${W} ${H}`}
+                                          onMouseMove={e2 => { const r2 = e2.currentTarget.getBoundingClientRect(); const t3 = Math.round(Math.max(0, Math.min(total, ((e2.clientX - r2.left) / r2.width * W - PAD.l) / (W - PAD.l - PAD.r) * total))); if (t3 !== chartHover) setChartHover(t3); }}
+                                          onMouseLeave={() => setChartHover(null)}
+                                          style={{ width: '100%', height: 'auto', display: 'block', background: card, borderRadius: '4px', border: `1px solid ${bd}`, cursor: 'crosshair' }}>
+                                          {[0, 25, 50, 75, 100].map(g => (
+                                            <g key={g}><line x1={PAD.l} x2={W - PAD.r} y1={yS(g)} y2={yS(g)} stroke={bd} strokeWidth="0.5" /><text x={PAD.l - 5} y={yS(g) + 3} fontSize="9" fill={dm} textAnchor="end">{g}%</text></g>
+                                          ))}
+                                          {[[0, "0'"], [45, "45'"], [90 + kS1, "90'"], [total, 'Fim']].map(([t2, l2]) => (
+                                            <text key={l2} x={xS(Math.min(t2, total))} y={H - PAD.b + 13} fontSize="9" fill={dm} textAnchor="middle">{l2}</text>
+                                          ))}
+                                          <line x1={xS(kTau)} x2={xS(kTau)} y1={PAD.t} y2={H - PAD.b} stroke={acc} strokeWidth="1" strokeDasharray="3,3" />
+                                          {series.map(([k, c]) => <path key={k} d={mkPath(k)} stroke={c} strokeWidth={k === 'pET' ? 1.5 : 2} strokeDasharray={k === 'pET' ? '5,3' : undefined} fill="none" />)}
+                                          {series.map(([k, c], i) => <text key={k} x={W - PAD.r - 34} y={yS(last[k]) + (i === 2 ? 10 : 3)} fontSize="10" fill={c} fontWeight="700" textAnchor="start">{last[k].toFixed(0)}%</text>)}
+                                          {li.ev.filter(e2 => e2.m <= total).map((e2, i) => (
+                                            <text key={i} x={xS(e2.m)} y={H - PAD.b - 3} fontSize="11" textAnchor="middle" style={{ userSelect: 'none' }}>{e2.t === 'g' ? '⚽' : '🟥'}</text>
+                                          ))}
+                                          {series.map(([k, c, l2], i) => (
+                                            <g key={'lg' + k}><rect x={PAD.l + 6 + i * 92} y={PAD.t} width="10" height="3" fill={c} /><text x={PAD.l + 19 + i * 92} y={PAD.t + 4} fontSize="9" fill={c}>{l2}</text></g>
+                                          ))}
+                                          {hov && (
+                                            <g pointerEvents="none">
+                                              <line x1={xS(hov.tau)} x2={xS(hov.tau)} y1={PAD.t} y2={H - PAD.b} stroke={tx} strokeWidth="0.8" />
+                                              {series.map(([k, c]) => <circle key={'h' + k} cx={xS(hov.tau)} cy={yS(hov[k])} r="3" fill={c} />)}
+                                              <rect x={tipX} y={PAD.t + 8} width="110" height={14 + series.length * 12} rx="4" fill="#0a0e18" stroke={bd} opacity="0.95" />
+                                              <text x={tipX + 8} y={PAD.t + 21} fontSize="10" fill={acc} fontWeight="700">{fmtClock(hov.tau, kS1)}</text>
+                                              {series.map(([k, c, l2], i) => (
+                                                <text key={'tt' + k} x={tipX + 8} y={PAD.t + 33 + i * 12} fontSize="9" fill={c}>{l2}: {hov[k].toFixed(1)}%</text>
+                                              ))}
+                                            </g>
+                                          )}
+                                        </svg>
+                                      </div>
+                                    );
+                                  })()}
+                                  <div style={{ fontSize: '9px', color: dm, textAlign: 'center' }}>Placar esperado no tempo normal: <strong style={{ color: tx }}>{kp.expScoreA.toFixed(1)} - {kp.expScoreB.toFixed(1)}</strong> • λ restante: {kp.laR.toFixed(2)}/{kp.lbR.toFixed(2)} • nos pênaltis: {fl(m.h)} {kp.pen.toFixed(0)}%</div>
+                                  <div style={{ fontSize: '8px', color: dm, marginTop: '4px', textAlign: 'center', fontStyle: 'italic' }}>Modelo: tempo normal como nos grupos (~{Math.round(LIVE_F2 * 100)}% dos gols no 2º tempo, vermelhos 0.78×/1.12×); empate em 90' → prorrogação (intensidade ≈ 1/3 do tempo normal) → pênaltis (favorece o Elo maior). Espelha o motor do mata-mata.</div>
                                 </div>
                               );
                             })()}
