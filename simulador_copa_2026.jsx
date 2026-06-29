@@ -2629,7 +2629,7 @@ export default function WC2026() {
               const CenterFinal = () => (
                 <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', minWidth: '180px', padding: '0 8px' }}>
                   <div style={{ fontSize: '20px', marginBottom: '4px' }}>🏆</div>
-                  <div onClick={() => setBracketSel(s => s?.type === 'match' && s.mn === 104 ? null : { type: 'match', mn: 104 })} title="Clique para ver os finalistas mais prováveis" style={{ textAlign: 'center', padding: '10px 12px', background: `linear-gradient(135deg,${acc}22,${card})`, borderRadius: '8px', border: `2px solid ${bracketSel?.type === 'match' && bracketSel.mn === 104 ? acc : gd + '55'}`, minWidth: '168px', cursor: 'pointer' }}>
+                  <div onClick={() => setBracketSel(s => s?.type === 'match' && s.mn === 104 ? null : { type: 'match', mn: 104 })} title="Clique para ver os finalistas e a chance de título de cada seleção" style={{ textAlign: 'center', padding: '10px 12px', background: `linear-gradient(135deg,${acc}22,${card})`, borderRadius: '8px', border: `2px solid ${bracketSel?.type === 'match' && bracketSel.mn === 104 ? acc : gd + '55'}`, minWidth: '168px', cursor: 'pointer' }}>
                     <div style={{ fontSize: '8px', color: dm, marginBottom: '4px' }}>M104 FINAL • MetLife 19/Jul</div>
                     <div style={{ fontSize: '12px', fontWeight: 700 }}>{fl(finH)} {nm(finH)}</div>
                     <div style={{ fontSize: '9px', color: dm, margin: '1px 0' }}>vs</div>
@@ -2670,7 +2670,7 @@ export default function WC2026() {
                   </div>
                   {brLayout === 'sides' ? sidesView : (<>
                   {/* Champion */}
-                  <div onClick={() => setBracketSel(s => s?.type === 'match' && s.mn === 104 ? null : { type: 'match', mn: 104 })} title="Clique para ver os finalistas mais prováveis" style={{ textAlign:'center', margin:'0 0 16px', padding:'12px', background:`linear-gradient(135deg,${acc}22,${card})`, borderRadius:'8px', border:`2px solid ${bracketSel?.type === 'match' && bracketSel.mn === 104 ? acc : gd + '44'}`, maxWidth:'350px', marginLeft:'auto', marginRight:'auto', cursor:'pointer' }}>
+                  <div onClick={() => setBracketSel(s => s?.type === 'match' && s.mn === 104 ? null : { type: 'match', mn: 104 })} title="Clique para ver os finalistas e a chance de título de cada seleção" style={{ textAlign:'center', margin:'0 0 16px', padding:'12px', background:`linear-gradient(135deg,${acc}22,${card})`, borderRadius:'8px', border:`2px solid ${bracketSel?.type === 'match' && bracketSel.mn === 104 ? acc : gd + '44'}`, maxWidth:'350px', marginLeft:'auto', marginRight:'auto', cursor:'pointer' }}>
                     <div style={{ fontSize:'8px', color:dm, marginBottom:'4px' }}>M104 Final • MetLife 19/Jul</div>
                     <div style={{ display:'flex', justifyContent:'center', gap:'10px', fontSize:'12px', marginBottom:'6px' }}>
                       <span style={{ fontWeight:700 }}>{fl(finH)} {nm(finH)}</span>
@@ -2708,7 +2708,8 @@ export default function WC2026() {
                   />
                   </>)}
 
-                  {/* Groups */}
+                  {/* Fase de grupos só no layout Caminhos — no Chaveamento (pôster) fica só o mata-mata */}
+                  {brLayout !== 'sides' && (<>
                   <div style={{ fontSize:'11px', fontWeight:700, color:acc, marginBottom:'6px' }}>Fase de Grupos</div>
                   <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill,minmax(120px,1fr))', gap:'4px', marginBottom:'10px' }}>
                     {Object.keys(groups).map(gn => <GCard key={gn} gn={gn}/>)}
@@ -2727,6 +2728,7 @@ export default function WC2026() {
                       })}
                     </div>
                   </div>}
+                  </>)}
 
                   {/* Painel de detalhe — clique em partida (MB), grupo (GCard) ou resumo dos 3ºs */}
                   {bracketSel && (() => {
@@ -2828,6 +2830,23 @@ export default function WC2026() {
                             {renderSide(ms.hWho, ms.hPos, baseMs?.hWho, `Mandante — ${sideLabel(KO_SPEC[mn]?.h)}`, gn)}
                             {renderSide(ms.aWho, ms.aPos, baseMs?.aWho, `Visitante — ${sideLabel(KO_SPEC[mn]?.a)}`, bl)}
                           </div>
+                          {mn === 104 && (() => {
+                            const champs = [...ranked].filter(r => (r.ch || 0) > 0).sort((a, b) => (b.ch || 0) - (a.ch || 0)).slice(0, 12);
+                            if (!champs.length) return null;
+                            return (
+                              <div style={{ marginTop: '8px', borderTop: `1px solid ${bd}`, paddingTop: '6px' }}>
+                                <div style={{ fontSize: '10px', fontWeight: 700, color: gd, marginBottom: '4px' }}>🏆 Chance de título (campeão) — todas as seleções</div>
+                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(150px,1fr))', gap: '2px 12px' }}>
+                                  {champs.map((r, i) => (
+                                    <div key={r.t} style={{ display: 'flex', justifyContent: 'space-between', gap: '6px', fontSize: '10px', alignItems: 'center', padding: '1px 0' }}>
+                                      <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: i === 0 ? gd : tx }}><span style={{ color: dm, fontSize: '8px', marginRight: '3px' }}>{i + 1}</span>{fl(r.t)} {nm(r.t)}</span>
+                                      <span style={{ fontWeight: 700, color: i === 0 ? gd : acc, whiteSpace: 'nowrap' }}>{(r.ch || 0).toFixed(1)}%{!probsOrig && dTag(r.ch || 0, baseAgg?.p?.[r.t]?.ch)}</span>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            );
+                          })()}
                         </div>
                       );
                     }
