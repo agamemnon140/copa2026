@@ -2825,28 +2825,31 @@ export default function WC2026() {
                             <span style={{ fontSize: '11px', fontWeight: 700, color: acc }}>M{mn} • {KO_SPEC[mn]?.l} • {DOW(KO_DATE[mn])} {KO_DATE[mn]} {KO_BRT[mn]} • {KO_CITY[mn]}</span>
                             {closeBtn}
                           </div>
+                          {mn === 104 && (() => {
+                            const champs = [...ranked].filter(r => (r.ch || 0) > 0).sort((a, b) => (b.ch || 0) - (a.ch || 0)).slice(0, 16);
+                            if (!champs.length) return null;
+                            const maxCh = champs[0].ch || 1;
+                            return (
+                              <div style={{ marginBottom: '10px' }}>
+                                <div style={{ fontSize: '10px', fontWeight: 700, color: gd, borderBottom: `1px solid ${bd}`, paddingBottom: '2px', marginBottom: '3px' }}>🏆 Chance de título (campeão)</div>
+                                {champs.map((r, i) => {
+                                  const pc = r.ch || 0;
+                                  return (
+                                    <div key={r.t} style={{ display: 'grid', gridTemplateColumns: '1fr 80px 70px', gap: '6px', alignItems: 'center', fontSize: '10px', padding: '1px 0' }}>
+                                      <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: i === 0 ? gd : tx }}><span style={{ color: dm, fontSize: '8px', marginRight: '3px' }}>{i + 1}</span>{fl(r.t)} {nm(r.t)}</span>
+                                      <div style={{ height: '7px', background: `${gd}18`, borderRadius: '2px' }}><div style={{ height: '100%', width: `${Math.min(pc / maxCh * 100, 100)}%`, background: gd, borderRadius: '2px' }} /></div>
+                                      <span style={{ textAlign: 'right', fontWeight: 700, color: i === 0 ? gd : acc }}>{pc.toFixed(1)}%{!probsOrig && dTag(pc, baseAgg?.p?.[r.t]?.ch)}</span>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            );
+                          })()}
                           <div style={{ fontSize: '8px', color: dm, marginBottom: '6px' }}>Quem (e qual posição de grupo) pode ocupar cada lado do confronto.</div>
                           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px', alignItems: 'start' }}>
                             {renderSide(ms.hWho, ms.hPos, baseMs?.hWho, `Mandante — ${sideLabel(KO_SPEC[mn]?.h)}`, gn)}
                             {renderSide(ms.aWho, ms.aPos, baseMs?.aWho, `Visitante — ${sideLabel(KO_SPEC[mn]?.a)}`, bl)}
                           </div>
-                          {mn === 104 && (() => {
-                            const champs = [...ranked].filter(r => (r.ch || 0) > 0).sort((a, b) => (b.ch || 0) - (a.ch || 0)).slice(0, 12);
-                            if (!champs.length) return null;
-                            return (
-                              <div style={{ marginTop: '8px', borderTop: `1px solid ${bd}`, paddingTop: '6px' }}>
-                                <div style={{ fontSize: '10px', fontWeight: 700, color: gd, marginBottom: '4px' }}>🏆 Chance de título (campeão) — todas as seleções</div>
-                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(150px,1fr))', gap: '2px 12px' }}>
-                                  {champs.map((r, i) => (
-                                    <div key={r.t} style={{ display: 'flex', justifyContent: 'space-between', gap: '6px', fontSize: '10px', alignItems: 'center', padding: '1px 0' }}>
-                                      <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: i === 0 ? gd : tx }}><span style={{ color: dm, fontSize: '8px', marginRight: '3px' }}>{i + 1}</span>{fl(r.t)} {nm(r.t)}</span>
-                                      <span style={{ fontWeight: 700, color: i === 0 ? gd : acc, whiteSpace: 'nowrap' }}>{(r.ch || 0).toFixed(1)}%{!probsOrig && dTag(r.ch || 0, baseAgg?.p?.[r.t]?.ch)}</span>
-                                    </div>
-                                  ))}
-                                </div>
-                              </div>
-                            );
-                          })()}
                         </div>
                       );
                     }
