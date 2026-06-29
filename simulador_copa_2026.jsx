@@ -2828,7 +2828,6 @@ export default function WC2026() {
                           {mn === 104 && (() => {
                             const champs = [...ranked].filter(r => (r.ch || 0) > 0).sort((a, b) => (b.ch || 0) - (a.ch || 0)).slice(0, 16);
                             if (!champs.length) return null;
-                            const maxCh = champs[0].ch || 1;
                             return (
                               <div style={{ marginBottom: '10px' }}>
                                 <div style={{ fontSize: '10px', fontWeight: 700, color: gd, borderBottom: `1px solid ${bd}`, paddingBottom: '2px', marginBottom: '3px' }}>🏆 Chance de título (campeão)</div>
@@ -2837,7 +2836,7 @@ export default function WC2026() {
                                   return (
                                     <div key={r.t} style={{ display: 'grid', gridTemplateColumns: '1fr 80px 70px', gap: '6px', alignItems: 'center', fontSize: '10px', padding: '1px 0' }}>
                                       <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: i === 0 ? gd : tx }}><span style={{ color: dm, fontSize: '8px', marginRight: '3px' }}>{i + 1}</span>{fl(r.t)} {nm(r.t)}</span>
-                                      <div style={{ height: '7px', background: `${gd}18`, borderRadius: '2px' }}><div style={{ height: '100%', width: `${Math.min(pc / maxCh * 100, 100)}%`, background: gd, borderRadius: '2px' }} /></div>
+                                      <div style={{ height: '7px', background: `${gd}18`, borderRadius: '2px' }} title="Escala 0–100%"><div style={{ height: '100%', width: `${Math.min(pc, 100)}%`, background: gd, borderRadius: '2px' }} /></div>
                                       <span style={{ textAlign: 'right', fontWeight: 700, color: i === 0 ? gd : acc }}>{pc.toFixed(1)}%{!probsOrig && dTag(pc, baseAgg?.p?.[r.t]?.ch)}</span>
                                     </div>
                                   );
