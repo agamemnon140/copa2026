@@ -1033,6 +1033,14 @@ const aggregate = (pool, all, groups, conditions = []) => {
         const ppk3 = sim.f3.ph + '×' + sim.f3.pa;
         matchPos[sim.f3.mn][ppk3] = (matchPos[sim.f3.mn][ppk3] || 0) + 1;
       }
+      if (sim.f3.winner) { if (!matchWin[sim.f3.mn]) matchWin[sim.f3.mn] = {}; matchWin[sim.f3.mn][sim.f3.winner] = (matchWin[sim.f3.mn][sim.f3.winner] || 0) + 1; }
+      // Por lado (mandante/visitante) — alimenta o painel de detalhe do 3º lugar (perdedores das semis)
+      if (!matchSide[sim.f3.mn]) matchSide[sim.f3.mn] = { hWho: {}, aWho: {}, hPos: {}, aPos: {} };
+      const sd3 = matchSide[sim.f3.mn];
+      sd3.hWho[sim.f3.home] = (sd3.hWho[sim.f3.home] || 0) + 1;
+      sd3.aWho[sim.f3.away] = (sd3.aWho[sim.f3.away] || 0) + 1;
+      if (sim.f3.ph) sd3.hPos[sim.f3.ph] = (sd3.hPos[sim.f3.ph] || 0) + 1;
+      if (sim.f3.pa) sd3.aPos[sim.f3.pa] = (sd3.aPos[sim.f3.pa] || 0) + 1;
     }
     if (s[sim.fin.home]) s[sim.fin.home].fin++;
     if (s[sim.fin.away]) s[sim.fin.away].fin++;
@@ -2621,7 +2629,7 @@ export default function WC2026() {
               const CenterFinal = () => (
                 <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', minWidth: '180px', padding: '0 8px' }}>
                   <div style={{ fontSize: '20px', marginBottom: '4px' }}>🏆</div>
-                  <div onClick={() => setBracketSel(s => s?.type === 'match' && s.mn === 104 ? null : { type: 'match', mn: 104 })} title="Clique para ver os finalistas mais prováveis" style={{ textAlign: 'center', padding: '10px 12px', background: `linear-gradient(135deg,${acc}22,${card})`, borderRadius: '8px', border: `2px solid ${gd}55`, minWidth: '168px', cursor: 'pointer' }}>
+                  <div onClick={() => setBracketSel(s => s?.type === 'match' && s.mn === 104 ? null : { type: 'match', mn: 104 })} title="Clique para ver os finalistas mais prováveis" style={{ textAlign: 'center', padding: '10px 12px', background: `linear-gradient(135deg,${acc}22,${card})`, borderRadius: '8px', border: `2px solid ${bracketSel?.type === 'match' && bracketSel.mn === 104 ? acc : gd + '55'}`, minWidth: '168px', cursor: 'pointer' }}>
                     <div style={{ fontSize: '8px', color: dm, marginBottom: '4px' }}>M104 FINAL • MetLife 19/Jul</div>
                     <div style={{ fontSize: '12px', fontWeight: 700 }}>{fl(finH)} {nm(finH)}</div>
                     <div style={{ fontSize: '9px', color: dm, margin: '1px 0' }}>vs</div>
@@ -2662,7 +2670,7 @@ export default function WC2026() {
                   </div>
                   {brLayout === 'sides' ? sidesView : (<>
                   {/* Champion */}
-                  <div style={{ textAlign:'center', margin:'0 0 16px', padding:'12px', background:`linear-gradient(135deg,${acc}22,${card})`, borderRadius:'8px', border:`2px solid ${gd}44`, maxWidth:'350px', marginLeft:'auto', marginRight:'auto' }}>
+                  <div onClick={() => setBracketSel(s => s?.type === 'match' && s.mn === 104 ? null : { type: 'match', mn: 104 })} title="Clique para ver os finalistas mais prováveis" style={{ textAlign:'center', margin:'0 0 16px', padding:'12px', background:`linear-gradient(135deg,${acc}22,${card})`, borderRadius:'8px', border:`2px solid ${bracketSel?.type === 'match' && bracketSel.mn === 104 ? acc : gd + '44'}`, maxWidth:'350px', marginLeft:'auto', marginRight:'auto', cursor:'pointer' }}>
                     <div style={{ fontSize:'8px', color:dm, marginBottom:'4px' }}>M104 Final • MetLife 19/Jul</div>
                     <div style={{ display:'flex', justifyContent:'center', gap:'10px', fontSize:'12px', marginBottom:'6px' }}>
                       <span style={{ fontWeight:700 }}>{fl(finH)} {nm(finH)}</span>
