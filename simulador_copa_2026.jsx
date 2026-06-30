@@ -813,6 +813,37 @@ const liveSeriesKO = (eH, eA, tA, tB, ev, s1, s2, base = { gA: 0, gB: 0, redsA: 
   }
   return out;
 };
+// AO VIVO na PRORROGAÇÃO: a partir do minuto etTau (0..30) e do placar AGREGADO atual (aAgg×bAgg),
+// dá P(cada time avança) e P(ir aos pênaltis). Intensidade ~ 1/3 do tempo normal, decaindo linearmente.
+const liveET = (a, b, tA, tB, { etTau = 0, aAgg = 0, bAgg = 0, redsA = 0, redsB = 0 }) => {
+  const { la, lb } = cL(a, b, matchTilt(tA, tB));
+  const adjA = Math.pow(0.78, redsA) * Math.pow(1.12, redsB), adjB = Math.pow(0.78, redsB) * Math.pow(1.12, redsA);
+  const rem = Math.max(0, Math.min(1, (30 - etTau) / 30)); // fração da prorrogação restante
+  const laR = Math.max(0.0001, la * 0.33 * rem * adjA), lbR = Math.max(0.0001, lb * 0.33 * rem * adjB);
+  let pa = 0, pe = 0, pb = 0;
+  for (let i = 0; i <= 6; i++) for (let j = 0; j <= 6; j++) { const p = pp(laR, i) * pp(lbR, j); const fa = aAgg + i, fb = bAgg + j; if (fa > fb) pa += p; else if (fa === fb) pe += p; else pb += p; }
+  const t = pa + pe + pb || 1; pa /= t; pe /= t; pb /= t;
+  const pen = Math.max(0, Math.min(1, 0.5 + (a - b) / 4000));
+  const pAdvA = pa + pe * pen;
+  return { pAdvA: pAdvA * 100, pAdvB: (1 - pAdvA) * 100, pPen: pe * 100 };
+};
+const liveSeriesET = (eH, eA, tA, tB, aAgg, bAgg, redsA, redsB) => {
+  const out = [];
+  for (let t = 0; t <= 30; t++) { const k = liveET(eH, eA, tA, tB, { etTau: t, aAgg, bAgg, redsA, redsB }); out.push({ tau: t, pAdvA: k.pAdvA, pAdvB: k.pAdvB, pET: k.pPen }); }
+  return out;
+};
+// P(A vence a disputa de pênaltis) a partir do estado parcial (gols feitos sA/sB e cobranças já batidas tA/tB),
+// melhor-de-5 + morte súbita. Clinch matemático → 1/0; senão completa por binomial (conversão p) com 50% na súbita.
+const penWin = (sA, tA, sB, tB, p = 0.75) => {
+  const rA = Math.max(0, 5 - tA), rB = Math.max(0, 5 - tB);
+  if (sA > sB + rB) return 1;
+  if (sB > sA + rA) return 0;
+  const binom = (n) => { const d = []; for (let k = 0; k <= n; k++) { let c = 1; for (let j = 0; j < k; j++) c = c * (n - j) / (j + 1); d.push(c * Math.pow(p, k) * Math.pow(1 - p, n - k)); } return d; };
+  const dA = binom(rA), dB = binom(rB);
+  let win = 0, tie = 0;
+  for (let i = 0; i <= rA; i++) for (let j = 0; j <= rB; j++) { const pr = dA[i] * dB[j], fa = sA + i, fb = sB + j; if (fa > fb) win += pr; else if (fa === fb) tie += pr; }
+  return win + tie * 0.5; // morte súbita com mesma conversão ≈ 50%
+};
 
 // Monte Carlo
 const mkKey = (a, b) => [a, b].sort().join('|');
@@ -1799,7 +1830,7 @@ export default function WC2026() {
   }, [liveCard, liC?.ev, liC?.s1, liC?.s2, liC?.gA, liC?.gB, liC?.redsA, liC?.redsB, liC?.csA, liC?.csB, injuries, groups, rSys, customElo, customME, useTilt, favWeight, spread, homeAdv]);
 
   // Mata-mata ao vivo: série de P(avança) ao longo do tempo normal (espelha liveChart, sem alvo de placar).
-  const LIKO_DEF = { tau: 0, gA: 0, gB: 0, redsA: 0, redsB: 0, s1: 3, s2: 6, ev: [], etA: 0, etB: 0, pkA: [], pkB: [] };
+  const LIKO_DEF = { tau: 0, gA: 0, gB: 0, redsA: 0, redsB: 0, s1: 3, s2: 6, ev: [], etTau: 30, etA: 0, etB: 0, pkA: [], pkB: [] };
   const liKO = liveKOmn != null ? liveKOInputs[liveKOmn] : null;
   const liveKOChart = useMemo(() => {
     if (liveKOmn == null) return null;
@@ -5178,50 +5209,103 @@ export default function WC2026() {
                                     );
                                   })()}
                                   <div style={{ fontSize: '9px', color: dm, textAlign: 'center' }}>Placar esperado no tempo normal: <strong style={{ color: tx }}>{kp.expScoreA.toFixed(1)} - {kp.expScoreB.toFixed(1)}</strong> • λ restante: {kp.laR.toFixed(2)}/{kp.lbR.toFixed(2)} • nos pênaltis: {fl(m.h)} {kp.pen.toFixed(0)}%</div>
-                                  {/* Prorrogação + pênaltis (acompanhamento manual quando empata em 90') */}
+                                  {/* Prorrogação (gráfico temporal) + pênaltis ao vivo — preencha conforme acontecer */}
                                   {(() => {
                                     const aReg = kSt.gA, bReg = kSt.gB;
-                                    const aET = aReg + (+li.etA || 0), bET = bReg + (+li.etB || 0);
-                                    const pkA = (li.pkA && li.pkA.length) ? li.pkA : [false, false, false, false, false];
-                                    const pkB = (li.pkB && li.pkB.length) ? li.pkB : [false, false, false, false, false];
-                                    const cA = pkA.filter(Boolean).length, cB = pkB.filter(Boolean).length;
+                                    const etA = +li.etA || 0, etB = +li.etB || 0;
+                                    const aET = aReg + etA, bET = bReg + etB; // placar agregado com a prorrogação
+                                    const etTau = Math.max(0, Math.min(30, li.etTau == null ? 30 : +li.etTau || 0));
+                                    const etNow = liveET(eH, eA, m.h, m.a, { etTau, aAgg: aET, bAgg: bET, redsA: kSt.redsA, redsB: kSt.redsB });
+                                    const etSeries = liveSeriesET(eH, eA, m.h, m.a, aET, bET, kSt.redsA, kSt.redsB);
+                                    const pkA = (li.pkA && li.pkA.length) ? li.pkA : ['p', 'p', 'p', 'p', 'p'];
+                                    const pkB = (li.pkB && li.pkB.length) ? li.pkB : ['p', 'p', 'p', 'p', 'p'];
+                                    const sA = pkA.filter(s => s === 'g').length, sB = pkB.filter(s => s === 'g').length;
+                                    const taA = pkA.filter(s => s !== 'p').length, taB = pkB.filter(s => s !== 'p').length;
+                                    const inPens = taA + taB > 0;
+                                    const pWinA = penWin(sA, taA, sB, taB) * 100;
                                     const etDecided = aET !== bET;
-                                    const advTeam = etDecided ? (aET > bET ? m.h : m.a) : (cA !== cB ? (cA > cB ? m.h : m.a) : null);
+                                    let advTeam = null, advTxt;
+                                    if (etDecided) { advTeam = aET > bET ? m.h : m.a; advTxt = `✅ Decidido na prorrogação — avança ${nm(advTeam)} (${aET}×${bET})`; }
+                                    else if (inPens) {
+                                      const rA = Math.max(0, 5 - taA), rB = Math.max(0, 5 - taB);
+                                      if (sA > sB + rB) { advTeam = m.h; advTxt = `✅ Pênaltis ${sA}×${sB} — avança ${nm(m.h)}`; }
+                                      else if (sB > sA + rA) { advTeam = m.a; advTxt = `✅ Pênaltis ${sA}×${sB} — avança ${nm(m.a)}`; }
+                                      else advTxt = `Pênaltis ${sA}×${sB} (em aberto) — P(avança): ${nm(m.h)} ${pWinA.toFixed(0)}% × ${(100 - pWinA).toFixed(0)}% ${nm(m.a)}`;
+                                    } else advTxt = `Empate em 90' iria à prorrogação; persistindo, decide nos pênaltis.`;
                                     const setPk = (side, arr) => setLI(side === 'A' ? 'pkA' : 'pkB', arr);
-                                    const toggle = (side, src, i) => { const a = src.slice(); a[i] = !a[i]; setPk(side, a); };
-                                    const add = (side, src) => { if (src.length < 15) setPk(side, [...src, false]); };
-                                    const rm = (side, src) => { if (src.length > 1) setPk(side, src.slice(0, -1)); };
+                                    const cyclePk = (side, src, i) => { const a = src.slice(); a[i] = a[i] === 'p' ? 'g' : a[i] === 'g' ? 'x' : 'p'; setPk(side, a); };
+                                    const addK = (side, src) => { if (src.length < 12) setPk(side, [...src, 'p']); };
+                                    const rmK = (side, src) => { if (src.length > 1) setPk(side, src.slice(0, -1)); };
                                     const ni = { width: '34px', padding: '2px', textAlign: 'center', background: card, color: tx, border: `1px solid ${bd}`, borderRadius: '3px', fontSize: '11px', fontWeight: 700 };
                                     const sb = { width: '17px', height: '17px', lineHeight: '13px', padding: 0, fontSize: '11px', background: 'transparent', color: dm, border: `1px solid ${bd}`, borderRadius: '3px', cursor: 'pointer' };
+                                    const pkStyle = (s, col) => ({ width: '20px', height: '20px', borderRadius: '50%', cursor: 'pointer', fontSize: '11px', lineHeight: 1, padding: 0, background: s === 'g' ? `${gn}33` : s === 'x' ? `${rd}22` : 'transparent', color: s === 'g' ? gn : s === 'x' ? rd : dm, border: `1px solid ${s === 'g' ? gn : s === 'x' ? rd : bd}` });
                                     return (
                                       <div style={{ marginTop: '8px', borderTop: `1px solid ${bd}`, paddingTop: '6px' }}>
-                                        <div style={{ fontSize: '9px', fontWeight: 700, color: gd, marginBottom: '5px' }}>⏱️ Se empatar em 90' → prorrogação e pênaltis (preencha conforme acontecer)</div>
+                                        <div style={{ fontSize: '9px', fontWeight: 700, color: gd, marginBottom: '5px' }}>⏱️ Prorrogação e pênaltis (se empatar em 90' — preencha conforme acontecer)</div>
+                                        {/* Minuto + gols da prorrogação */}
+                                        <div style={{ display: 'grid', gridTemplateColumns: 'auto 1fr auto auto auto', gap: '6px', alignItems: 'center', fontSize: '9px', color: dm, marginBottom: '4px' }}>
+                                          <span>Min prorrog.:</span>
+                                          <input type="range" min="0" max="30" value={etTau} onChange={e => setLI('etTau', +e.target.value)} style={{ width: '100%' }} />
+                                          <span style={{ fontWeight: 700, color: gd, minWidth: '34px', textAlign: 'right' }}>{90 + etTau}'</span>
+                                          <button onClick={() => setLI('etTau', 0)} style={sb}>90</button>
+                                          <button onClick={() => setLI('etTau', 30)} style={sb}>120</button>
+                                        </div>
                                         <div style={{ display: 'flex', gap: '6px', alignItems: 'center', fontSize: '9px', color: dm, marginBottom: '7px', flexWrap: 'wrap' }}>
                                           <span>Gols na prorrogação:</span>
-                                          <span style={{ color: gn, fontWeight: 600 }}>{fl(m.h)} {nm(m.h).slice(0, 10)}</span>
+                                          <span style={{ color: gn, fontWeight: 600 }}>{fl(m.h)} {nm(m.h).slice(0, 8)}</span>
                                           <input type="number" min="0" max="9" value={li.etA || 0} onChange={e => setLI('etA', +e.target.value || 0)} style={ni} />
                                           <span>×</span>
                                           <input type="number" min="0" max="9" value={li.etB || 0} onChange={e => setLI('etB', +e.target.value || 0)} style={ni} />
-                                          <span style={{ color: bl, fontWeight: 600 }}>{nm(m.a).slice(0, 10)} {fl(m.a)}</span>
+                                          <span style={{ color: bl, fontWeight: 600 }}>{nm(m.a).slice(0, 8)} {fl(m.a)}</span>
                                           <span style={{ marginLeft: 'auto' }}>placar em 120': <strong style={{ color: tx }}>{aET}×{bET}</strong></span>
                                         </div>
-                                        <div style={{ fontSize: '9px', color: dm, marginBottom: '3px' }}>Pênaltis (clique: ● gol / ○ perdeu ou não cobrou):</div>
+                                        {/* Boxes da prorrogação */}
+                                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '4px', fontSize: '10px', marginBottom: '6px' }}>
+                                          <div style={{ background: `${gn}14`, padding: '3px', borderRadius: '3px', textAlign: 'center', border: `1px solid ${gn}33` }}><div style={{ fontSize: '8px', color: dm }}>Avança {nm(m.h).slice(0, 8)}</div><div style={{ fontSize: '12px', fontWeight: 700, color: gn }}>{etNow.pAdvA.toFixed(1)}%</div></div>
+                                          <div style={{ background: `${gd}14`, padding: '3px', borderRadius: '3px', textAlign: 'center', border: `1px solid ${gd}33` }}><div style={{ fontSize: '8px', color: dm }}>Pênaltis</div><div style={{ fontSize: '12px', fontWeight: 700, color: gd }}>{etNow.pPen.toFixed(1)}%</div></div>
+                                          <div style={{ background: `${bl}14`, padding: '3px', borderRadius: '3px', textAlign: 'center', border: `1px solid ${bl}33` }}><div style={{ fontSize: '8px', color: dm }}>Avança {nm(m.a).slice(0, 8)}</div><div style={{ fontSize: '12px', fontWeight: 700, color: bl }}>{etNow.pAdvB.toFixed(1)}%</div></div>
+                                        </div>
+                                        {/* Gráfico temporal da prorrogação (0..30') */}
+                                        {(() => {
+                                          const W = 800, H = 180, PAD = { l: 34, r: 12, t: 12, b: 22 };
+                                          const xS = t2 => PAD.l + (t2 / 30) * (W - PAD.l - PAD.r);
+                                          const yS = p2 => PAD.t + (1 - p2 / 100) * (H - PAD.t - PAD.b);
+                                          const mkPath = key => etSeries.map((p2, i) => (i === 0 ? 'M' : 'L') + xS(p2.tau).toFixed(1) + ',' + yS(p2[key]).toFixed(1)).join(' ');
+                                          const last = etSeries[etSeries.length - 1];
+                                          const series = [['pAdvA', gn, 'Av ' + nm(m.h).slice(0, 3).toUpperCase()], ['pAdvB', bl, 'Av ' + nm(m.a).slice(0, 3).toUpperCase()], ['pET', gd, 'Pênaltis']];
+                                          return (
+                                            <div style={{ marginBottom: '6px' }}>
+                                              <div style={{ fontSize: '8px', color: dm, marginBottom: '2px' }}>Evolução na prorrogação (se o placar atual da prorrogação se mantiver)</div>
+                                              <svg viewBox={`0 0 ${W} ${H}`} style={{ width: '100%', height: 'auto', display: 'block', background: card, borderRadius: '4px', border: `1px solid ${bd}` }}>
+                                                {[0, 50, 100].map(g => (<g key={g}><line x1={PAD.l} x2={W - PAD.r} y1={yS(g)} y2={yS(g)} stroke={bd} strokeWidth="0.5" /><text x={PAD.l - 4} y={yS(g) + 3} fontSize="9" fill={dm} textAnchor="end">{g}%</text></g>))}
+                                                {[[0, "90'"], [15, "105'"], [30, "120'"]].map(([t2, l2]) => (<text key={l2} x={xS(t2)} y={H - PAD.b + 12} fontSize="9" fill={dm} textAnchor="middle">{l2}</text>))}
+                                                <line x1={xS(etTau)} x2={xS(etTau)} y1={PAD.t} y2={H - PAD.b} stroke={gd} strokeWidth="1" strokeDasharray="3,3" />
+                                                {series.map(([k, c]) => <path key={k} d={mkPath(k)} stroke={c} strokeWidth={k === 'pET' ? 1.5 : 2} strokeDasharray={k === 'pET' ? '5,3' : undefined} fill="none" />)}
+                                                {series.map(([k, c], i) => <text key={k} x={W - PAD.r - 30} y={yS(last[k]) + (i === 2 ? 10 : 3)} fontSize="9" fill={c} fontWeight="700">{last[k].toFixed(0)}%</text>)}
+                                                {series.map(([k, c, l2], i) => (<g key={'lg' + k}><rect x={PAD.l + 6 + i * 92} y={PAD.t} width="10" height="3" fill={c} /><text x={PAD.l + 19 + i * 92} y={PAD.t + 4} fontSize="9" fill={c}>{l2}</text></g>))}
+                                              </svg>
+                                            </div>
+                                          );
+                                        })()}
+                                        {/* Pênaltis ao vivo (3 estados por cobrança) */}
+                                        <div style={{ fontSize: '9px', color: dm, marginBottom: '3px' }}>Pênaltis (clique para alternar: ○ a cobrar → <span style={{ color: gn }}>● gol</span> → <span style={{ color: rd }}>✕ erro</span>):</div>
                                         {[['A', m.h, gn, pkA], ['B', m.a, bl, pkB]].map(([side, tm, col, arr]) => (
                                           <div key={side} style={{ display: 'flex', alignItems: 'center', gap: '4px', marginBottom: '3px', flexWrap: 'wrap' }}>
                                             <span style={{ fontSize: '9px', minWidth: '92px', color: col, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{fl(tm)} {nm(tm).slice(0, 10)}</span>
-                                            {arr.map((made, i) => (
-                                              <button key={i} onClick={() => toggle(side, arr, i)} title={`Cobrança ${i + 1}`} style={{ width: '20px', height: '20px', borderRadius: '50%', cursor: 'pointer', fontSize: '11px', lineHeight: 1, padding: 0, background: made ? `${col}33` : 'transparent', color: made ? col : dm, border: `1px solid ${made ? col : bd}` }}>{made ? '●' : '○'}</button>
-                                            ))}
-                                            <button onClick={() => rm(side, arr)} title="Remover cobrança" style={sb}>−</button>
-                                            <button onClick={() => add(side, arr)} title="Adicionar cobrança (morte súbita)" style={sb}>+</button>
-                                            <strong style={{ fontSize: '12px', color: col, marginLeft: '4px', minWidth: '14px', textAlign: 'right' }}>{side === 'A' ? cA : cB}</strong>
+                                            {arr.map((s, i) => (<button key={i} onClick={() => cyclePk(side, arr, i)} title={`Cobrança ${i + 1}`} style={pkStyle(s, col)}>{s === 'g' ? '●' : s === 'x' ? '✕' : '○'}</button>))}
+                                            <button onClick={() => rmK(side, arr)} title="Remover cobrança" style={sb}>−</button>
+                                            <button onClick={() => addK(side, arr)} title="Adicionar cobrança (morte súbita)" style={sb}>+</button>
+                                            <strong style={{ fontSize: '12px', color: col, marginLeft: '4px', minWidth: '14px', textAlign: 'right' }}>{side === 'A' ? sA : sB}</strong>
                                           </div>
                                         ))}
-                                        <div style={{ fontSize: '10px', textAlign: 'center', marginTop: '5px', fontWeight: 700, color: advTeam ? gn : dm }}>
-                                          {etDecided ? `✅ Decidido na prorrogação — avança ${nm(advTeam)} (${aET}×${bET})`
-                                            : (cA || cB) ? (advTeam ? `✅ Pênaltis ${cA}×${cB} — avança ${nm(advTeam)}` : `Pênaltis ${cA}×${cB} — empatado (continua)`)
-                                            : `Empate em 90' iria à prorrogação; persistindo, decide nos pênaltis.`}
-                                        </div>
+                                        {inPens && !etDecided && advTeam == null && (
+                                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '9px', color: dm, margin: '2px 0 4px' }}>
+                                            <span style={{ color: gn, fontWeight: 700 }}>{pWinA.toFixed(0)}%</span>
+                                            <div style={{ flex: 1, height: '6px', background: `${bl}22`, borderRadius: '3px', overflow: 'hidden' }}><div style={{ width: `${pWinA}%`, height: '100%', background: gn }} /></div>
+                                            <span style={{ color: bl, fontWeight: 700 }}>{(100 - pWinA).toFixed(0)}%</span>
+                                          </div>
+                                        )}
+                                        <div style={{ fontSize: '10px', textAlign: 'center', marginTop: '4px', fontWeight: 700, color: advTeam ? gn : dm }}>{advTxt}</div>
                                       </div>
                                     );
                                   })()}
