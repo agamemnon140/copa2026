@@ -1799,7 +1799,7 @@ export default function WC2026() {
   }, [liveCard, liC?.ev, liC?.s1, liC?.s2, liC?.gA, liC?.gB, liC?.redsA, liC?.redsB, liC?.csA, liC?.csB, injuries, groups, rSys, customElo, customME, useTilt, favWeight, spread, homeAdv]);
 
   // Mata-mata ao vivo: série de P(avança) ao longo do tempo normal (espelha liveChart, sem alvo de placar).
-  const LIKO_DEF = { tau: 0, gA: 0, gB: 0, redsA: 0, redsB: 0, s1: 3, s2: 6, ev: [] };
+  const LIKO_DEF = { tau: 0, gA: 0, gB: 0, redsA: 0, redsB: 0, s1: 3, s2: 6, ev: [], etA: 0, etB: 0, pkA: [], pkB: [] };
   const liKO = liveKOmn != null ? liveKOInputs[liveKOmn] : null;
   const liveKOChart = useMemo(() => {
     if (liveKOmn == null) return null;
@@ -5178,6 +5178,53 @@ export default function WC2026() {
                                     );
                                   })()}
                                   <div style={{ fontSize: '9px', color: dm, textAlign: 'center' }}>Placar esperado no tempo normal: <strong style={{ color: tx }}>{kp.expScoreA.toFixed(1)} - {kp.expScoreB.toFixed(1)}</strong> • λ restante: {kp.laR.toFixed(2)}/{kp.lbR.toFixed(2)} • nos pênaltis: {fl(m.h)} {kp.pen.toFixed(0)}%</div>
+                                  {/* Prorrogação + pênaltis (acompanhamento manual quando empata em 90') */}
+                                  {(() => {
+                                    const aReg = kSt.gA, bReg = kSt.gB;
+                                    const aET = aReg + (+li.etA || 0), bET = bReg + (+li.etB || 0);
+                                    const pkA = (li.pkA && li.pkA.length) ? li.pkA : [false, false, false, false, false];
+                                    const pkB = (li.pkB && li.pkB.length) ? li.pkB : [false, false, false, false, false];
+                                    const cA = pkA.filter(Boolean).length, cB = pkB.filter(Boolean).length;
+                                    const etDecided = aET !== bET;
+                                    const advTeam = etDecided ? (aET > bET ? m.h : m.a) : (cA !== cB ? (cA > cB ? m.h : m.a) : null);
+                                    const setPk = (side, arr) => setLI(side === 'A' ? 'pkA' : 'pkB', arr);
+                                    const toggle = (side, src, i) => { const a = src.slice(); a[i] = !a[i]; setPk(side, a); };
+                                    const add = (side, src) => { if (src.length < 15) setPk(side, [...src, false]); };
+                                    const rm = (side, src) => { if (src.length > 1) setPk(side, src.slice(0, -1)); };
+                                    const ni = { width: '34px', padding: '2px', textAlign: 'center', background: card, color: tx, border: `1px solid ${bd}`, borderRadius: '3px', fontSize: '11px', fontWeight: 700 };
+                                    const sb = { width: '17px', height: '17px', lineHeight: '13px', padding: 0, fontSize: '11px', background: 'transparent', color: dm, border: `1px solid ${bd}`, borderRadius: '3px', cursor: 'pointer' };
+                                    return (
+                                      <div style={{ marginTop: '8px', borderTop: `1px solid ${bd}`, paddingTop: '6px' }}>
+                                        <div style={{ fontSize: '9px', fontWeight: 700, color: gd, marginBottom: '5px' }}>⏱️ Se empatar em 90' → prorrogação e pênaltis (preencha conforme acontecer)</div>
+                                        <div style={{ display: 'flex', gap: '6px', alignItems: 'center', fontSize: '9px', color: dm, marginBottom: '7px', flexWrap: 'wrap' }}>
+                                          <span>Gols na prorrogação:</span>
+                                          <span style={{ color: gn, fontWeight: 600 }}>{fl(m.h)} {nm(m.h).slice(0, 10)}</span>
+                                          <input type="number" min="0" max="9" value={li.etA || 0} onChange={e => setLI('etA', +e.target.value || 0)} style={ni} />
+                                          <span>×</span>
+                                          <input type="number" min="0" max="9" value={li.etB || 0} onChange={e => setLI('etB', +e.target.value || 0)} style={ni} />
+                                          <span style={{ color: bl, fontWeight: 600 }}>{nm(m.a).slice(0, 10)} {fl(m.a)}</span>
+                                          <span style={{ marginLeft: 'auto' }}>placar em 120': <strong style={{ color: tx }}>{aET}×{bET}</strong></span>
+                                        </div>
+                                        <div style={{ fontSize: '9px', color: dm, marginBottom: '3px' }}>Pênaltis (clique: ● gol / ○ perdeu ou não cobrou):</div>
+                                        {[['A', m.h, gn, pkA], ['B', m.a, bl, pkB]].map(([side, tm, col, arr]) => (
+                                          <div key={side} style={{ display: 'flex', alignItems: 'center', gap: '4px', marginBottom: '3px', flexWrap: 'wrap' }}>
+                                            <span style={{ fontSize: '9px', minWidth: '92px', color: col, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{fl(tm)} {nm(tm).slice(0, 10)}</span>
+                                            {arr.map((made, i) => (
+                                              <button key={i} onClick={() => toggle(side, arr, i)} title={`Cobrança ${i + 1}`} style={{ width: '20px', height: '20px', borderRadius: '50%', cursor: 'pointer', fontSize: '11px', lineHeight: 1, padding: 0, background: made ? `${col}33` : 'transparent', color: made ? col : dm, border: `1px solid ${made ? col : bd}` }}>{made ? '●' : '○'}</button>
+                                            ))}
+                                            <button onClick={() => rm(side, arr)} title="Remover cobrança" style={sb}>−</button>
+                                            <button onClick={() => add(side, arr)} title="Adicionar cobrança (morte súbita)" style={sb}>+</button>
+                                            <strong style={{ fontSize: '12px', color: col, marginLeft: '4px', minWidth: '14px', textAlign: 'right' }}>{side === 'A' ? cA : cB}</strong>
+                                          </div>
+                                        ))}
+                                        <div style={{ fontSize: '10px', textAlign: 'center', marginTop: '5px', fontWeight: 700, color: advTeam ? gn : dm }}>
+                                          {etDecided ? `✅ Decidido na prorrogação — avança ${nm(advTeam)} (${aET}×${bET})`
+                                            : (cA || cB) ? (advTeam ? `✅ Pênaltis ${cA}×${cB} — avança ${nm(advTeam)}` : `Pênaltis ${cA}×${cB} — empatado (continua)`)
+                                            : `Empate em 90' iria à prorrogação; persistindo, decide nos pênaltis.`}
+                                        </div>
+                                      </div>
+                                    );
+                                  })()}
                                   <div style={{ fontSize: '8px', color: dm, marginTop: '4px', textAlign: 'center', fontStyle: 'italic' }}>Modelo: tempo normal como nos grupos (~{Math.round(LIVE_F2 * 100)}% dos gols no 2º tempo, vermelhos 0.78×/1.12×); empate em 90' → prorrogação (intensidade ≈ 1/3 do tempo normal) → pênaltis (favorece o Elo maior). Espelha o motor do mata-mata.</div>
                                 </div>
                               );
